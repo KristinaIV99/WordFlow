@@ -6,15 +6,27 @@ export class UIManager {
         this.CLASS_NAME = '[UIManager]';
         this.debugLog('Konstruktorius inicializuotas');
         
-        // UI elementai
-        this.fileInput = null;
-        this.content = null;
-        this.dictionaryList = null;
-        this.dictionaryStats = null;
-        this.wordSearchInput = null;
-        this.searchResults = null;
-        this.exportButton = null;
-        this.progressBar = null;
+        // Pagrindiniai elementai - inicializuojami konstruktoriuje
+        this.fileInput = document.getElementById('fileInput');
+        this.content = document.getElementById('content');
+        this.dictionaryList = document.getElementById('dictionaryList');
+        this.dictionaryStats = document.getElementById('dictionaryStats');
+        this.wordSearchInput = document.getElementById('wordSearch');
+        this.searchResults = document.getElementById('searchResults');
+        
+        // Eksporto mygtukas
+        this.exportButton = document.createElement('button');
+        this.exportButton.textContent = 'Eksportas';
+        this.exportButton.className = 'export-button';
+        this.exportButton.style.display = 'none';
+        document.body.appendChild(this.exportButton);
+        
+        // Progreso juosta  
+        this.progressBar = document.createElement('div');
+        this.progressBar.className = 'progress-bar';
+        document.body.prepend(this.progressBar);
+        
+        // Puslapiavimo kontrolės inicializuojamos atskirai su initPagination metodu
         this.paginationControls = null;
     }
     
@@ -24,32 +36,11 @@ export class UIManager {
         }
     }
     
-    // Inicializuoja UI elementus
-    initUI(paginator) {
+    // Inicializuojame puslapiavimo kontroles (iškviečiama iš main.js)
+    initPagination(paginator) {
         try {
-            this.debugLog('Inicializuojami UI elementai');
+            this.debugLog('Inicializuojamos puslapiavimo kontrolės');
             
-            // Pagrindiniai elementai
-            this.fileInput = document.getElementById('fileInput');
-            this.content = document.getElementById('content');
-            this.dictionaryList = document.getElementById('dictionaryList');
-            this.dictionaryStats = document.getElementById('dictionaryStats');
-            this.wordSearchInput = document.getElementById('wordSearch');
-            this.searchResults = document.getElementById('searchResults');
-            
-            // Eksporto mygtukas
-            this.exportButton = document.createElement('button');
-            this.exportButton.textContent = 'Eksportas';
-            this.exportButton.className = 'export-button';
-            this.exportButton.style.display = 'none';
-            document.body.appendChild(this.exportButton);
-            
-            // Progreso juosta
-            this.progressBar = document.createElement('div');
-            this.progressBar.className = 'progress-bar';
-            document.body.prepend(this.progressBar);
-            
-            // Puslapiavimo kontrolės
             this.paginationControls = document.createElement('div');
             this.paginationControls.className = 'pagination-controls';
             this.paginationControls.innerHTML = `
@@ -67,7 +58,7 @@ export class UIManager {
                 
             this.paginationControls.style.display = 'none';
             document.body.appendChild(this.paginationControls);
-    
+            
             // Globalus popup uždarymo įvykis
             document.addEventListener('click', (e) => {
                 const popup = document.querySelector('.word-info-popup');
@@ -78,9 +69,9 @@ export class UIManager {
                 }
             });
             
-            this.debugLog('UI elementai sėkmingai inicializuoti');
+            this.debugLog('Puslapiavimo kontrolės inicializuotos');
         } catch (error) {
-            console.error(`${this.CLASS_NAME} Klaida inicializuojant UI:`, error);
+            console.error(`${this.CLASS_NAME} Klaida inicializuojant puslapiavimo kontroles:`, error);
         }
     }
     
@@ -102,10 +93,12 @@ export class UIManager {
     showLoadingState() {
         try {
             this.debugLog('Rodoma įkėlimo būsena');
-            const loader = document.createElement('div');
-            loader.className = 'loading';
-            loader.innerHTML = '<p>Kraunama...</p>';
-            this.content.replaceChildren(loader);
+            if (this.content) {
+                const loader = document.createElement('div');
+                loader.className = 'loading';
+                loader.innerHTML = '<p>Kraunama...</p>';
+                this.content.replaceChildren(loader);
+            }
         } catch (error) {
             console.error(`${this.CLASS_NAME} Klaida rodant įkėlimo būseną:`, error);
         }
@@ -114,8 +107,10 @@ export class UIManager {
     hideLoadingState() {
         try {
             this.debugLog('Paslepiama įkėlimo būsena');
-            const loader = this.content.querySelector('.loading');
-            if (loader) loader.remove();
+            if (this.content) {
+                const loader = this.content.querySelector('.loading');
+                if (loader) loader.remove();
+            }
         } catch (error) {
             console.error(`${this.CLASS_NAME} Klaida slepiant įkėlimo būseną:`, error);
         }
@@ -124,11 +119,13 @@ export class UIManager {
     showError(message) {
         try {
             console.warn('Klaidos pranešimas:', message);
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error-message';
-            errorDiv.textContent = message;
-            this.content.insertAdjacentElement('afterbegin', errorDiv);
-            setTimeout(() => errorDiv.remove(), 5000);
+            if (this.content) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.textContent = message;
+                this.content.insertAdjacentElement('afterbegin', errorDiv);
+                setTimeout(() => errorDiv.remove(), 5000);
+            }
         } catch (error) {
             console.error(`${this.CLASS_NAME} Klaida rodant klaidos pranešimą:`, error);
         }
