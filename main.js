@@ -620,6 +620,7 @@ class App {
     showError(message) {
         this.uiManager.showError(message);
     }
+}
 
 window.addEventListener('DOMContentLoaded', () => {
     window.app = new App();
