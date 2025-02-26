@@ -1,5 +1,5 @@
 // text-processor.js
-const DEBUG = false;  // arba false true kai norėsime išjungti
+const DEBUG = true;  // arba false true kai norėsime išjungti
 
 // Tekstų normalizavimas
 export class TextNormalizer {
