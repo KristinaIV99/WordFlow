@@ -1,5 +1,5 @@
 // file-manager.js
-const DEBUG = false;  // arba false true kai norėsime išjungti
+const DEBUG = true;  // arba false true kai norėsime išjungti
 
 export class FileManager {
     constructor() {
