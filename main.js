@@ -57,45 +57,19 @@ class App {
     initUI() {
         this.debugLog('Inicializuojami UI elementai...');
         
-        this.fileInput = document.getElementById('fileInput');
-        this.content = document.getElementById('content');
-        this.dictionaryList = document.getElementById('dictionaryList');
-        this.dictionaryStats = document.getElementById('dictionaryStats');
-        this.wordSearchInput = document.getElementById('wordSearch');
-        this.searchResults = document.getElementById('searchResults');
+        // Naudokite UIManager elementus, kurie jau inicializuoti
+        this.fileInput = this.uiManager.fileInput;
+        this.content = this.uiManager.content;
+        this.dictionaryList = this.uiManager.dictionaryList;
+        this.dictionaryStats = this.uiManager.dictionaryStats;
+        this.wordSearchInput = this.uiManager.wordSearchInput;
+        this.searchResults = this.uiManager.searchResults;
+        this.exportButton = this.uiManager.exportButton;
+        this.progressBar = this.uiManager.progressBar;
         
-        this.exportButton = document.createElement('button');
-        this.exportButton.textContent = 'Eksportas';
-        this.exportButton.className = 'export-button';
-        this.exportButton.style.display = 'none';
-        document.body.appendChild(this.exportButton);
-        
-        this.progressBar = document.createElement('div');
-        this.progressBar.className = 'progress-bar';
-        document.body.prepend(this.progressBar);
-
-        this.paginationControls = document.createElement('div');
-        this.paginationControls.className = 'pagination-controls';
-        this.paginationControls.innerHTML = `
-            <button class="prev-page">&#8592;</button>
-            <span class="page-info">1 / 1</span>
-            <button class="next-page">&#8594;</button>
-        `;
-        
-        // Įterpiame slankiklį tarp mygtukų
-        const slider = this.paginator.initializeSlider();
-        this.paginationControls.insertBefore(slider, 
-            this.paginationControls.querySelector('.page-info'));
-            
-        this.paginationControls.style.display = 'none';
-        document.body.appendChild(this.paginationControls);
-
-        document.addEventListener('click', (e) => {
-            const popup = document.querySelector('.word-info-popup');
-            if (popup && !e.target.closest('.word-info-popup') && !e.target.closest('.highlight-word') && !e.target.closest('.highlight-phrase')) {
-                popup.remove();
-            }
-        });
+        // Inicializuokime puslapiavimo kontroles per UIManager
+        this.uiManager.initPagination(this.paginator);
+        this.paginationControls = this.uiManager.paginationControls;
         
         this.debugLog('UI elementai sėkmingai inicializuoti');
     }
