@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mpd-v6'; // Atnaujintas versijos numeris
+const CACHE_NAME = 'mpd-v7'; // Atnaujintas versijos numeris
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -22,7 +22,10 @@ const STATIC_ASSETS = [
   './text-selection-handler.js',
   './words.json',
   './phrases.json',
-  './state-manager.js'
+  './state-manager.js',
+  './ui-manager.js',
+  './file-manager.js',
+  './text-processor.js'
 ];
 
 const SW_NAME = '[ServiceWorker]';
