@@ -1,8 +1,9 @@
 // main.js
-const DEBUG = false;  // arba false true kai norėsime išjungti
+const DEBUG = true;  // arba false true kai norėsime išjungti
 
-import { TextNormalizer } from './text-normalizer.js';
+import { UIManager } from './ui-manager.js';
 import { TextReader } from './text-reader.js';
+import { TextNormalizer } from './text-normalizer.js';
 import { HtmlConverter } from './html-converter.js';
 import { DictionaryManager } from './dictionary-manager.js';
 import { TextStatistics } from './text-statistics.js';
@@ -28,6 +29,9 @@ class App {
         this.textHighlighter = new TextHighlighter(this.dictionaryManager);
         this.textSelectionHandler = new TextSelectionHandler();
         this.stateManager = new StateManager();
+        
+        // Nauja UI Manager instancija
+        this.uiManager = new UIManager();
         
         this.isProcessing = false;
         this.currentText = '';
@@ -599,40 +603,23 @@ class App {
         this.content.replaceChildren(errorDiv);
     }
 
-    showError(message) {
-        console.warn('Klaidos pranešimas:', message);
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'error-message';
-        errorDiv.textContent = message;
-        this.content.insertAdjacentElement('afterbegin', errorDiv);
-        setTimeout(() => errorDiv.remove(), 5000);
-    }
-
     updateProgress({ percent }) {
-        if (this.progressBar) {
-            this.progressBar.style.width = `${percent}%`;
-            if(percent >= 100) {
-                setTimeout(() => {
-                    this.progressBar.style.width = '0%';
-                }, 500);
-            }
-        }
+        this.uiManager.updateProgress(percent);
     }
 
     showLoadingState() {
         this.debugLog('Rodoma įkėlimo būsena...');
-        const loader = document.createElement('div');
-        loader.className = 'loading';
-        loader.innerHTML = '<p>Kraunama...</p>';
-        this.content.replaceChildren(loader);
+        this.uiManager.showLoadingState();
     }
 
     hideLoadingState() {
         this.debugLog('Paslepiama įkėlimo būsena');
-        const loader = this.content.querySelector('.loading');
-        if(loader) loader.remove();
+        this.uiManager.hideLoadingState();
     }
-}
+
+    showError(message) {
+        this.uiManager.showError(message);
+    }
 
 window.addEventListener('DOMContentLoaded', () => {
     window.app = new App();
