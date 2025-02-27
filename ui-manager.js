@@ -28,11 +28,26 @@ export class UIManager {
         
         // Puslapiavimo kontrolės inicializuojamos atskirai su initPagination metodu
         this.paginationControls = null;
+        
+        // Nauji kintamieji
+        this.textHighlighter = null;
+        this.paginator = null;
+        this.currentText = '';
     }
     
     debugLog(...args) {
         if (DEBUG) {
             console.log(`${this.CLASS_NAME} [DEBUG]`, ...args);
+        }
+    }
+    
+    // Nustatome reikalingus komponentus iš App klasės
+    setComponents(components) {
+        if (components.textHighlighter) {
+            this.textHighlighter = components.textHighlighter;
+        }
+        if (components.paginator) {
+            this.paginator = components.paginator;
         }
     }
     
@@ -130,6 +145,136 @@ export class UIManager {
             console.error(`${this.CLASS_NAME} Klaida rodant klaidos pranešimą:`, error);
         }
     }
+    
+    /**
+     * Nustatome turinio elementą ir atnaujiname vartotojo sąsają
+     * @param {string} html - HTML turinys
+     * @param {object} stats - Teksto statistika
+     * @returns {object} - Puslapiavimo duomenys
+     */
+    async setContent(html, stats = {}, currentText = '') {
+        this.debugLog('Nustatomas naujas turinys...');
+        
+        this.currentText = currentText;
+        
+        const div = document.createElement('div');
+        div.className = 'text-content';
+
+        // Statistikos dalis
+        if (stats && Object.keys(stats).length > 0) {
+            const statsDiv = document.createElement('div');
+            statsDiv.className = 'text-stats';
+            statsDiv.innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-value">${stats.totalWords || 0}</div>
+                    <div class="stat-label">Iš viso žodžių</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.uniqueWords || 0}</div>
+                    <div class="stat-label">Unikalių žodžių</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.unknownWords || 0}</div>
+                    <div class="stat-label">Nežinomų žodžių</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.unknownPercentage || 0}%</div>
+                    <div class="stat-label">Nežinomų žodžių %</div>
+                </div>
+            `;
+            div.appendChild(statsDiv);
+        }
+
+        // Tekstas su žymėjimais
+        let highlightedHtml = html;
+        if (this.textHighlighter && this.currentText) {
+            highlightedHtml = await this.textHighlighter.processText(this.currentText, html);
+            this.debugLog('Pažymėtas tekstas:', highlightedHtml.slice(0, 200));
+        }
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'paginated-content';
+        contentDiv.innerHTML = highlightedHtml;
+        
+        div.appendChild(contentDiv);
+        
+        let pageData = { content: contentDiv.innerHTML, currentPage: 1, totalPages: 1 };
+        
+        if (this.paginator) {
+            pageData = this.paginator.setContent(contentDiv.innerHTML);
+            this.debugLog('Puslapiavimo duomenys:', pageData);
+            contentDiv.innerHTML = pageData.content;
+        }
+        
+        this.content.replaceChildren(div);
+        this.updatePageContent(pageData);
+        
+        return pageData;
+    }
+    
+    /**
+     * Atnaujina puslapio turinį
+     * @param {object} pageData - Puslapio duomenys
+     */
+    updatePageContent(pageData) {
+        const contentDiv = document.querySelector('.paginated-content');
+        if (!contentDiv) return;
+        
+        contentDiv.innerHTML = pageData.content;
+        
+        if (this.paginationControls) {
+            const pageInfo = this.paginationControls.querySelector('.page-info');
+            if (pageInfo) {
+                pageInfo.textContent = `${pageData.currentPage} / ${pageData.totalPages}`;
+            }
+            
+            // Atnaujinti slankiklį jei yra paginator
+            if (this.paginator) {
+                this.paginator.updateSlider();
+            }
+            
+            this.paginationControls.style.display = 
+                pageData.totalPages > 1 ? 'flex' : 'none';
+        }
+    }
+    
+    /**
+     * Rodo žodžių paieškos rezultatus
+     * @param {Array} results - Paieškos rezultatai
+     */
+    displaySearchResults(results) {
+        if (!this.searchResults) return;
+        
+        let html = '<div class="search-results">';
+        
+        if (results.length > 0) {
+            results.forEach(result => {
+                html += `
+                    <div class="search-item ${result.type}-section">
+                        <div class="pattern">${result.pattern}</div>
+                        <div class="info">
+                            <div>Vertimas: ${result.info.vertimas}</div>
+                            <div>CEFR: ${result.info.CEFR}</div>
+                        </div>
+                        ${result.related.length > 0 ? `
+                            <div class="related">
+                                <div>Susiję:</div>
+                                ${result.related.map(r => `
+                                    <span>${r.pattern} (${r.type})</span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+        } else {
+            html += '<div class="no-results">Nieko nerasta</div>';
+        }
+        
+        html += '</div>';
+        this.searchResults.innerHTML = html;
+    }
+    
     bindEvents(callbacks) {
         try {
             this.debugLog('Prijungiami įvykių klausytojai');
