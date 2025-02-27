@@ -3,6 +3,7 @@ const DEBUG = true;  // arba false true kai norėsime išjungti
 
 import { UIManager } from './ui-manager.js';
 import { FileManager } from './file-manager.js';
+import { TextProcessor } from './text-processor.js';
 import { TextReader } from './text-reader.js';
 import { TextNormalizer } from './text-normalizer.js';
 import { HtmlConverter } from './html-converter.js';
@@ -18,6 +19,7 @@ class App {
     constructor() {
         this.CLASS_NAME = '[App]';
         this.fileManager = new FileManager();
+        this.textProcessor = new TextProcessor();
         this.reader = new TextReader();
         this.normalizer = new TextNormalizer();
         this.htmlConverter = new HtmlConverter();
@@ -234,7 +236,7 @@ class App {
             const rawText = await this.fileManager.readFile(file);
             this.debugLog('Failas nuskaitytas, teksto ilgis:', rawText.length);
             
-            const normalizedText = this.normalizer.normalizeMarkdown(rawText);
+            const normalizedText = this.textProcessor.normalizeMarkdown(rawText);
             this.debugLog('Tekstas normalizuotas');
             this.currentText = normalizedText;
             
@@ -262,7 +264,7 @@ class App {
             
             // Konvertuojame į HTML
             this.debugLog('Pradedama konversija į HTML');
-            const html = await this.htmlConverter.convertToHtml(normalizedText);
+            const html = await this.textProcessor.convertToHtml(normalizedText);
             this.debugLog('HTML konversija baigta, ilgis:', html.length);
             
             this.setContent(html, textStats);
