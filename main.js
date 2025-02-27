@@ -2,6 +2,7 @@
 const DEBUG = true;  // arba false true kai norėsime išjungti
 
 import { UIManager } from './ui-manager.js';
+import { FileManager } from './file-manager.js';
 import { TextReader } from './text-reader.js';
 import { TextNormalizer } from './text-normalizer.js';
 import { HtmlConverter } from './html-converter.js';
@@ -16,6 +17,7 @@ import { StateManager } from './state-manager.js';
 class App {
     constructor() {
         this.CLASS_NAME = '[App]';
+        this.fileManager = new FileManager();
         this.reader = new TextReader();
         this.normalizer = new TextNormalizer();
         this.htmlConverter = new HtmlConverter();
@@ -38,6 +40,7 @@ class App {
         this.loadedFiles = new Set();
         this.currentFileName = '';
         
+        // Inicializacija
         if (DEBUG) console.log(`${this.CLASS_NAME} Konstruktorius inicializuotas`);
         this.initUI();
         this.bindEvents();
@@ -86,8 +89,8 @@ class App {
             onWordSearch: () => this.handleWordSearch()
         });
         
-        // Palikite reader.events klausytojus čia, nes jie susiję su failų skaitymu
-        this.reader.events.addEventListener('progress', (e) => this.updateProgress(e.detail));
+        // Klausomės FileManager progreso
+        this.fileManager.events.addEventListener('progress', (e) => this.updateProgress(e.detail));
 
         this.debugLog('Įvykių klausytojai sėkmingai prijungti');
     }
@@ -228,12 +231,12 @@ class App {
                 this.paginator.goToPage(lastPage.pageNumber);
             }
             
-            const rawText = await this.reader.readFile(file);
-			this.debugLog('Failas nuskaitytas, teksto ilgis:', rawText.length);
-			
-			const normalizedText = this.normalizer.normalizeMarkdown(rawText);
-			this.debugLog('Tekstas normalizuotas');
-			this.currentText = normalizedText;
+            const rawText = await this.fileManager.readFile(file);
+            this.debugLog('Failas nuskaitytas, teksto ilgis:', rawText.length);
+            
+            const normalizedText = this.normalizer.normalizeMarkdown(rawText);
+            this.debugLog('Tekstas normalizuotas');
+            this.currentText = normalizedText;
             
             // Skaičiuojame teksto statistiką
             this.debugLog('Pradedamas teksto statistikos skaičiavimas');
