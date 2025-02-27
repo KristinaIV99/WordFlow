@@ -275,6 +275,83 @@ export class UIManager {
         this.searchResults.innerHTML = html;
     }
     
+    /**
+     * Prideda žodžio informacijos popupą prie elemento
+     * @param {HTMLElement} element - Elementas, prie kurio pridėti popupą
+     * @param {Object} info - Žodžio informacija
+     */
+    addWordInfoPopup(element, info) {
+        element.addEventListener('click', (e) => {
+            const popup = document.createElement('div');
+            popup.className = 'word-info-popup';
+            
+            if (info.meanings) {
+                // Homonimų rodymas
+                popup.innerHTML = `
+                    <div class="popup-title">${info.text}</div>
+                    ${info.meanings.map(meaning => `
+                        <div class="meaning-item">
+                            <div class="kalbos-dalis">${meaning["kalbos dalis"]}</div>
+                            <div>Vertimas: ${meaning.vertimas}</div>
+                            <div>Bazinė forma: ${meaning["bazinė forma"]}</div>
+                            <div>Bazės vertimas: ${meaning["bazė vertimas"]}</div>
+                            <div>CEFR: ${meaning.CEFR}</div>
+                        </div>
+                    `).join('')}
+                `;
+            } else {
+                // Paprastas žodis/frazė
+                popup.innerHTML = `
+                    <div class="popup-title">${info.text}</div>
+                    <div>Vertimas: ${info.vertimas}</div>
+                    <div>Bazinė forma: ${info["bazinė forma"]}</div>
+                    <div>Bazės vertimas: ${info["bazė vertimas"]}</div>
+                    <div>CEFR: ${info.CEFR}</div>
+                `;
+            }
+            
+            // Pozicionuojame popupą
+            popup.style.position = 'absolute';
+            popup.style.left = `${e.pageX}px`;
+            popup.style.top = `${e.pageY}px`;
+            
+            document.body.appendChild(popup);
+            
+            // Uždarome popupą paspaudus kitur
+            const closePopup = () => {
+                popup.remove();
+                document.removeEventListener('click', closePopup);
+            };
+            setTimeout(() => document.addEventListener('click', closePopup), 0);
+        });
+    }
+
+    /**
+     * Generuoja HTML žodyno grupei
+     * @param {Object} dictionary - Žodyno objektas
+     * @param {boolean} isPhrase - Ar tai frazių žodynas
+     * @returns {string} - Sugeneruotas HTML
+     */
+    renderDictionaryGroup(dictionary, isPhrase) {
+        return `<div class="dictionary-group ${isPhrase ? 'phrases' : 'words'}">
+            <h4>${dictionary.dictionary}</h4>
+            ${dictionary.matches.map(match => `
+                <div class="match-item">
+                    <div class="match-header">
+                        <strong>${match.word}</strong>
+                        <span class="cefr-badge">${match.CEFR || 'N/A'}</span>
+                    </div>
+                    <div class="match-details">
+                        <div>Vertimas: ${match.vertimas}</div>
+                        <div>Kalbos dalis: ${match['kalbos dalis']}</div>
+                        <div>Bazinė forma: ${match['bazinė forma']}</div>
+                        <div>Bazės vertimas: ${match['bazė vertimas']}</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>`;
+    }
+
     bindEvents(callbacks) {
         try {
             this.debugLog('Prijungiami įvykių klausytojai');
