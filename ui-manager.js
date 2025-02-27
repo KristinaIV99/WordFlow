@@ -130,4 +130,38 @@ export class UIManager {
             console.error(`${this.CLASS_NAME} Klaida rodant klaidos pranešimą:`, error);
         }
     }
+    bindEvents(callbacks) {
+        try {
+            this.debugLog('Prijungiami įvykių klausytojai');
+            
+            if (this.fileInput && callbacks.onFileChange) {
+                this.fileInput.addEventListener('change', callbacks.onFileChange);
+            }
+            
+            if (this.exportButton && callbacks.onExport) {
+                this.exportButton.addEventListener('click', callbacks.onExport);
+            }
+            
+            if (this.paginationControls) {
+                const prevBtn = this.paginationControls.querySelector('.prev-page');
+                const nextBtn = this.paginationControls.querySelector('.next-page');
+               
+                if (prevBtn && callbacks.onPrevPage) {
+                    prevBtn.addEventListener('click', callbacks.onPrevPage);
+                }
+                
+                if (nextBtn && callbacks.onNextPage) {
+                    nextBtn.addEventListener('click', callbacks.onNextPage);
+                }
+            }
+            
+            if (this.wordSearchInput && callbacks.onWordSearch) {
+                this.wordSearchInput.addEventListener('input', callbacks.onWordSearch);
+            }
+            
+            this.debugLog('Įvykių klausytojai sėkmingai prijungti');
+        } catch (error) {
+           console.error(`${this.CLASS_NAME} Klaida prijungiant įvykius:`, error);
+        }
+    }
 }
