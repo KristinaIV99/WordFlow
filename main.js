@@ -77,24 +77,17 @@ class App {
     bindEvents() {
         this.debugLog('Prijungiami įvykių klausytojai...');
 
-        this.fileInput.addEventListener('change', (e) => this.handleFile(e));
-        this.reader.events.addEventListener('progress', (e) => this.updateProgress(e.detail));
-        this.exportButton.addEventListener('click', () => this.handleExport());
-
-        const prevBtn = this.paginationControls.querySelector('.prev-page');
-        const nextBtn = this.paginationControls.querySelector('.next-page');
-        prevBtn.addEventListener('click', () => {
-            this.debugLog('Pereinama į ankstesnį puslapį');
-            this.paginator.previousPage();
-        });
-        nextBtn.addEventListener('click', () => {
-            this.debugLog('Pereinama į kitą puslapį');
-            this.paginator.nextPage();
+        // Naudojame UIManager bindEvents metodą
+        this.uiManager.bindEvents({
+            onFileChange: (e) => this.handleFile(e),
+            onExport: () => this.handleExport(),
+            onPrevPage: () => this.paginator.previousPage(),
+            onNextPage: () => this.paginator.nextPage(),
+            onWordSearch: () => this.handleWordSearch()
         });
         
-        if (this.wordSearchInput) {
-            this.wordSearchInput.addEventListener('input', () => this.handleWordSearch());
-        }
+        // Palikite reader.events klausytojus čia, nes jie susiję su failų skaitymu
+        this.reader.events.addEventListener('progress', (e) => this.updateProgress(e.detail));
 
         this.debugLog('Įvykių klausytojai sėkmingai prijungti');
     }
