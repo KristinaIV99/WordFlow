@@ -206,7 +206,11 @@ export class UIManager {
         // Tekstas su žymėjimais
         let highlightedHtml = html;
         if (options.textHighlighter && currentText) {
-            highlightedHtml = await options.textHighlighter.processText(currentText, html);
+            highlightedHtml = await options.textHighlighter.processText(
+                currentText, 
+                html,
+                options.highlights // Perduodame highlights
+            );
             this.debugLog('Pažymėtas tekstas:', highlightedHtml.slice(0, 200));
         }
         
