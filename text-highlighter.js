@@ -34,6 +34,8 @@ export class TextHighlighter {
     }
 
     async processText(text, html, savedHighlights = null) {
+        console.log("PRADINIS HTML (pradžia):", html.substring(0, 200));
+
         if (DEBUG) console.log(`${this.HIGHLIGHTER_NAME} Pradedamas teksto žymėjimas`);
 
         try {
@@ -74,6 +76,7 @@ export class TextHighlighter {
             const processedHtml = doc.body.innerHTML;
             this.saveHighlights();
             
+            console.log("GALUTINIS HTML (pradžia):", processedHtml.substring(0, 200));
             return processedHtml;
         } catch (error) {
             console.error('Klaida žymint tekstą:', error);
