@@ -25,42 +25,82 @@ export class TextPaginator {
 
     splitIntoPages(text) {
         console.log("SKAIDOMAS TEKSTAS (pradžia):", text.substring(0, 200));
-
+        
         // Pašaliname HTML žymes skaičiuojant žodžius
         const stripHtml = (html) => {
             const tmp = document.createElement('div');
             tmp.innerHTML = html;
             return tmp.textContent || tmp.innerText || '';
         };
-
-        // PAKEITIMAS: Vietoj suskaidymo pagal eilutes, naudojame DOM
+        
+        // Dalinamas tekstas į pastraipas, išlaikant žymas
+        // Vietoj paprastos regexp, padarome labiau išmanų skaidymą
+        const chunks = [];
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = text;
         
-        // Surandame visus paragrafus, antraštes ir kitus bloko elementus
-        const blocks = tempDiv.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, blockquote, ul, ol, pre');
+        // Naudojame originalų tekstą, bet tiesiog geriau jį suskaidome
+        // Ieškome HTML pastraipų ir antraščių pagal žymų ribas
+        const htmlChunks = text.split(/(<\/?(?:p|h[1-6]|div|section|article|blockquote)[^>]*>)/gi);
         
+        let currentChunk = '';
+        let inTag = false;
+        let tagStack = [];
+        
+        for (let i = 0; i < htmlChunks.length; i++) {
+            const chunk = htmlChunks[i];
+            
+            // Skaičiuojam žymų atidarymą/uždarymą
+            if (chunk.match(/<\/?[^>]+>/)) {
+                if (chunk.match(/<\//)) {
+                    // Žymos uždarymas
+                    if (tagStack.length > 0) {
+                        tagStack.pop();
+                    }
+                    inTag = tagStack.length > 0;
+                } else {
+                    // Žymos atidarymas
+                    tagStack.push(chunk);
+                    inTag = true;
+                }
+            }
+            
+            currentChunk += chunk;
+            
+            // Jei esame už žymų ribų ir tai nėra tik tarpai, traktuojame tai kaip atskirą gabalą
+            if (!inTag && chunk.trim() && !chunk.match(/<\/?[^>]+>/)) {
+                chunks.push(currentChunk);
+                currentChunk = '';
+            }
+        }
+        
+        // Pridedame likusį turinį
+        if (currentChunk.trim()) {
+            chunks.push(currentChunk);
+        }
+        
+        // Dabar skaičiuojame žodžius ir skirstome į puslapius
         const pages = [];
         let currentPage = [];
         let wordCount = 0;
         
-        for (let i = 0; i < blocks.length; i++) {
-            const block = blocks[i];
-            const plainText = stripHtml(block.outerHTML);
-            const words = plainText.trim().split(/\s+/).length;
-            
-            if (currentPage.length === 0) {
-                currentPage.push(block.outerHTML);
+        for (let i = 0; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            const plainText = stripHtml(chunk);
+            const words = plainText.trim().split(/\s+/).filter(Boolean).length;
+           
+           if (currentPage.length === 0) {
+                currentPage.push(chunk);
                 wordCount = words;
                 continue;
             }
             
             if (wordCount >= this.minWordsPerPage) {
                 pages.push(currentPage.join(''));
-                currentPage = [block.outerHTML];
+                currentPage = [chunk];
                 wordCount = words;
             } else {
-                currentPage.push(block.outerHTML);
+                currentPage.push(chunk);
                 wordCount += words;
             }
         }
@@ -69,6 +109,7 @@ export class TextPaginator {
             pages.push(currentPage.join(''));
         }
         
+        console.log("Puslapių skaičius:", pages.length);
         return pages;
     }
 
