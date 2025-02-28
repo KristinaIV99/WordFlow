@@ -169,7 +169,7 @@ class App {
             this.currentFileName = savedState.fileName;
             this.currentText = savedState.text;
 
-            const normalizedText = this.normalizer.normalizeMarkdown(this.currentText);
+            const normalizedText = this.currentText;
             this.debugLog('Tekstas normalizuotas');
 
             // Paraleliai vykdome žodynų įkėlimą ir HTML konvertavimą
