@@ -24,45 +24,53 @@ export class TextPaginator {
     }
 
     splitIntoPages(text) {
-		console.log("SKAIDOMAS TEKSTAS (pradžia):", text.substring(0, 200));
-		// Pašaliname HTML žymes skaičiuojant žodžius
-		const stripHtml = (html) => {
-			const tmp = document.createElement('div');
-			tmp.innerHTML = html;
-			return tmp.textContent || tmp.innerText || '';
-		};
+        console.log("SKAIDOMAS TEKSTAS (pradžia):", text.substring(0, 200));
 
-		const sentences = text.match(/[^\n]+/g) || [];
-		const pages = [];
-		let currentPage = [];
-		let wordCount = 0;
+        // Pašaliname HTML žymes skaičiuojant žodžius
+        const stripHtml = (html) => {
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            return tmp.textContent || tmp.innerText || '';
+        };
 
-		for(let i = 0; i < sentences.length; i++) {
-			const sentence = sentences[i];
-			const plainText = stripHtml(sentence);
-			const words = plainText.trim().split(/\s+/).length;
-			
-			if (currentPage.length === 0) {
-				currentPage.push(sentence);
-				wordCount = words;
-				continue;
-			}
-
-			if (wordCount >= this.minWordsPerPage) {
-				pages.push(currentPage.join(''));
-				currentPage = [sentence];
-				wordCount = words;
-			} else {
-				currentPage.push(sentence);
-				wordCount += words;
-			}
-		}
-
-		if (currentPage.length > 0) {
-			pages.push(currentPage.join(''));
-		}
-		return pages;
-	}
+        // PAKEITIMAS: Vietoj suskaidymo pagal eilutes, naudojame DOM
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = text;
+        
+        // Surandame visus paragrafus, antraštes ir kitus bloko elementus
+        const blocks = tempDiv.querySelectorAll('p, h1, h2, h3, h4, h5, h6, div, blockquote, ul, ol, pre');
+        
+        const pages = [];
+        let currentPage = [];
+        let wordCount = 0;
+        
+        for (let i = 0; i < blocks.length; i++) {
+            const block = blocks[i];
+            const plainText = stripHtml(block.outerHTML);
+            const words = plainText.trim().split(/\s+/).length;
+            
+            if (currentPage.length === 0) {
+                currentPage.push(block.outerHTML);
+                wordCount = words;
+                continue;
+            }
+            
+            if (wordCount >= this.minWordsPerPage) {
+                pages.push(currentPage.join(''));
+                currentPage = [block.outerHTML];
+                wordCount = words;
+            } else {
+                currentPage.push(block.outerHTML);
+                wordCount += words;
+            }
+        }
+        
+        if (currentPage.length > 0) {
+            pages.push(currentPage.join(''));
+        }
+        
+        return pages;
+    }
 
     getCurrentPageContent() {
         return {
