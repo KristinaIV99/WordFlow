@@ -23,9 +23,7 @@ const STATIC_ASSETS = [
   './words.json',
   './phrases.json',
   './state-manager.js',
-  './ui-manager.js',
-  './file-manager.js',
-  './text-processor.js'
+  './ui-manager.js'
 ];
 
 const SW_NAME = '[ServiceWorker]';
