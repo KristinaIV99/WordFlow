@@ -164,4 +164,72 @@ export class UIManager {
            console.error(`${this.CLASS_NAME} Klaida prijungiant įvykius:`, error);
         }
     }
+    /**
+     * Nustatome turinio elementą ir atnaujiname vartotojo sąsają
+     * @param {string} html - HTML turinys
+     * @param {object} stats - Teksto statistika
+     * @param {string} currentText - Originalus tekstas
+     * @param {object} options - Papildomos parinktys
+     * @returns {object} - Puslapiavimo duomenys
+     */
+    async setContent(html, stats = {}, currentText = '', options = {}) {
+        this.debugLog('Nustatomas naujas turinys...');
+        
+        const div = document.createElement('div');
+        div.className = 'text-content';
+
+        // Statistikos dalis
+        if (stats && Object.keys(stats).length > 0) {
+            const statsDiv = document.createElement('div');
+            statsDiv.className = 'text-stats';
+            statsDiv.innerHTML = `
+               <div class="stat-item">
+                    <div class="stat-value">${stats.totalWords || 0}</div>
+                    <div class="stat-label">Iš viso žodžių</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.uniqueWords || 0}</div>
+                    <div class="stat-label">Unikalių žodžių</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.unknownWords || 0}</div>
+                    <div class="stat-label">Nežinomų žodžių</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.unknownPercentage || 0}%</div>
+                    <div class="stat-label">Nežinomų žodžių %</div>
+                </div>
+            `;
+            div.appendChild(statsDiv);
+        }
+
+        // Tekstas su žymėjimais
+        let highlightedHtml = html;
+        if (options.textHighlighter && currentText) {
+            highlightedHtml = await options.textHighlighter.processText(currentText, html);
+            this.debugLog('Pažymėtas tekstas:', highlightedHtml.slice(0, 200));
+        }
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'paginated-content';
+        contentDiv.innerHTML = highlightedHtml;
+        
+        div.appendChild(contentDiv);
+        
+        let pageData = { content: contentDiv.innerHTML, currentPage: 1, totalPages: 1 };
+        
+        if (options.paginator) {
+            pageData = options.paginator.setContent(contentDiv.innerHTML);
+            this.debugLog('Puslapiavimo duomenys:', pageData);
+            contentDiv.innerHTML = pageData.content;
+        }
+        
+        this.content.replaceChildren(div);
+        
+        if (options.onUpdatePageContent) {
+            options.onUpdatePageContent(pageData);
+        }
+        
+        return pageData;
+    }
 }
