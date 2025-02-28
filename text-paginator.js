@@ -24,94 +24,44 @@ export class TextPaginator {
     }
 
     splitIntoPages(text) {
-        console.log("SKAIDOMAS TEKSTAS (pradžia):", text.substring(0, 200));
-        
-        // Pašaliname HTML žymes skaičiuojant žodžius
-        const stripHtml = (html) => {
-            const tmp = document.createElement('div');
-            tmp.innerHTML = html;
-            return tmp.textContent || tmp.innerText || '';
-        };
-        
-        // Dalinamas tekstas į pastraipas, išlaikant žymas
-        // Vietoj paprastos regexp, padarome labiau išmanų skaidymą
-        const chunks = [];
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = text;
-        
-        // Naudojame originalų tekstą, bet tiesiog geriau jį suskaidome
-        // Ieškome HTML pastraipų ir antraščių pagal žymų ribas
-        const htmlChunks = text.split(/(<\/?(?:p|h[1-6]|div|section|article|blockquote)[^>]*>)/gi);
-        
-        let currentChunk = '';
-        let inTag = false;
-        let tagStack = [];
-        
-        for (let i = 0; i < htmlChunks.length; i++) {
-            const chunk = htmlChunks[i];
-            
-            // Skaičiuojam žymų atidarymą/uždarymą
-            if (chunk.match(/<\/?[^>]+>/)) {
-                if (chunk.match(/<\//)) {
-                    // Žymos uždarymas
-                    if (tagStack.length > 0) {
-                        tagStack.pop();
-                    }
-                    inTag = tagStack.length > 0;
-                } else {
-                    // Žymos atidarymas
-                    tagStack.push(chunk);
-                    inTag = true;
-                }
-            }
-            
-            currentChunk += chunk;
-            
-            // Jei esame už žymų ribų ir tai nėra tik tarpai, traktuojame tai kaip atskirą gabalą
-            if (!inTag && chunk.trim() && !chunk.match(/<\/?[^>]+>/)) {
-                chunks.push(currentChunk);
-                currentChunk = '';
-            }
-        }
-        
-        // Pridedame likusį turinį
-        if (currentChunk.trim()) {
-            chunks.push(currentChunk);
-        }
-        
-        // Dabar skaičiuojame žodžius ir skirstome į puslapius
-        const pages = [];
-        let currentPage = [];
-        let wordCount = 0;
-        
-        for (let i = 0; i < chunks.length; i++) {
-            const chunk = chunks[i];
-            const plainText = stripHtml(chunk);
-            const words = plainText.trim().split(/\s+/).filter(Boolean).length;
-           
-           if (currentPage.length === 0) {
-                currentPage.push(chunk);
-                wordCount = words;
-                continue;
-            }
-            
-            if (wordCount >= this.minWordsPerPage) {
-                pages.push(currentPage.join(''));
-                currentPage = [chunk];
-                wordCount = words;
-            } else {
-                currentPage.push(chunk);
-                wordCount += words;
-            }
-        }
-        
-        if (currentPage.length > 0) {
-            pages.push(currentPage.join(''));
-        }
-        
-        console.log("Puslapių skaičius:", pages.length);
-        return pages;
-    }
+		// Pašaliname HTML žymes skaičiuojant žodžius
+		const stripHtml = (html) => {
+			const tmp = document.createElement('div');
+			tmp.innerHTML = html;
+			return tmp.textContent || tmp.innerText || '';
+		};
+
+		const sentences = text.match(/[^\n]+/g) || [];
+		const pages = [];
+		let currentPage = [];
+		let wordCount = 0;
+
+		for(let i = 0; i < sentences.length; i++) {
+			const sentence = sentences[i];
+			const plainText = stripHtml(sentence);
+			const words = plainText.trim().split(/\s+/).length;
+			
+			if (currentPage.length === 0) {
+				currentPage.push(sentence);
+				wordCount = words;
+				continue;
+			}
+
+			if (wordCount >= this.minWordsPerPage) {
+				pages.push(currentPage.join(''));
+				currentPage = [sentence];
+				wordCount = words;
+			} else {
+				currentPage.push(sentence);
+				wordCount += words;
+			}
+		}
+
+		if (currentPage.length > 0) {
+			pages.push(currentPage.join(''));
+		}
+		return pages;
+	}
 
     getCurrentPageContent() {
         return {
