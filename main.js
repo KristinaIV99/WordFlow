@@ -240,11 +240,8 @@ class App {
                 this.paginator.goToPage(lastPage.pageNumber);
             }
             
-            const rawText = await this.fileManager.readFile(file);
-            this.debugLog('Failas nuskaitytas, teksto ilgis:', rawText.length);
-            
-            const normalizedText = this.textProcessor.normalizeMarkdown(rawText);
-            this.debugLog('Tekstas normalizuotas');
+            const normalizedText = await this.reader.readFile(file);
+            this.debugLog('Failas nuskaitytas, teksto ilgis:', normalizedText.length);
             this.currentText = normalizedText;
             
             // Skaičiuojame teksto statistiką
