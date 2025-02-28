@@ -2,8 +2,6 @@
 const DEBUG = true;  // arba false true kai norėsime išjungti
 
 import { UIManager } from './ui-manager.js';
-import { FileManager } from './file-manager.js';
-import { TextProcessor } from './text-processor.js';
 import { TextReader } from './text-reader.js';
 import { TextNormalizer } from './text-normalizer.js';
 import { HtmlConverter } from './html-converter.js';
@@ -18,8 +16,6 @@ import { StateManager } from './state-manager.js';
 class App {
     constructor() {
         this.CLASS_NAME = '[App]';
-        this.fileManager = new FileManager();
-        this.textProcessor = new TextProcessor();
         this.reader = new TextReader();
         this.normalizer = new TextNormalizer();
         this.htmlConverter = new HtmlConverter();
@@ -37,18 +33,11 @@ class App {
         // Nauja UI Manager instancija
         this.uiManager = new UIManager();
         
-        // Perduodame reikalingus komponentus į UI Manager
-        this.uiManager.setComponents({
-            textHighlighter: this.textHighlighter,
-            paginator: this.paginator
-        });
-        
         this.isProcessing = false;
         this.currentText = '';
         this.loadedFiles = new Set();
         this.currentFileName = '';
         
-        // Inicializacija
         if (DEBUG) console.log(`${this.CLASS_NAME} Konstruktorius inicializuotas`);
         this.initUI();
         this.bindEvents();
@@ -97,8 +86,8 @@ class App {
             onWordSearch: () => this.handleWordSearch()
         });
         
-        // Klausomės FileManager progreso
-        this.fileManager.events.addEventListener('progress', (e) => this.updateProgress(e.detail));
+        // Palikite reader.events klausytojus čia, nes jie susiję su failų skaitymu
+        this.reader.events.addEventListener('progress', (e) => this.updateProgress(e.detail));
 
         this.debugLog('Įvykių klausytojai sėkmingai prijungti');
     }
@@ -168,8 +157,8 @@ class App {
             this.currentFileName = savedState.fileName;
             this.currentText = savedState.text;
 
-            const normalizedText = this.normalizer.normalizeMarkdown(this.currentText);
-            this.debugLog('Tekstas normalizuotas');
+			const normalizedText = this.normalizer.normalizeMarkdown(this.currentText);
+			this.debugLog('Tekstas normalizuotas');
 
             // Paraleliai vykdome žodynų įkėlimą ir HTML konvertavimą
             const [_, html] = await Promise.all([
@@ -188,8 +177,8 @@ class App {
                 savedState.highlights
             );
 
-            // Nustatome turinį ir mygtukus (naudojame UIManager)
-            const pageData = await this.uiManager.setContent(processedHtml, textStats, this.currentText);
+            // Nustatome turinį ir mygtukus
+            this.setContent(processedHtml, textStats);
 
             const savedTextsButton = document.getElementById('savedTextsButton');
             if (savedTextsButton) {
@@ -222,7 +211,7 @@ class App {
             
             this.isProcessing = true;
             this.fileInput.disabled = true;
-            this.uiManager.showLoadingState(); // Pakeista iš this.showLoadingState()
+            this.showLoadingState();
             
             const file = e.target.files[0];
             if(!file) {
@@ -239,12 +228,12 @@ class App {
                 this.paginator.goToPage(lastPage.pageNumber);
             }
             
-            const rawText = await this.fileManager.readFile(file);
-            this.debugLog('Failas nuskaitytas, teksto ilgis:', rawText.length);
-            
-            const normalizedText = this.textProcessor.normalizeMarkdown(rawText);
-            this.debugLog('Tekstas normalizuotas');
-            this.currentText = normalizedText;
+            const rawText = await this.reader.readFile(file);
+			this.debugLog('Failas nuskaitytas, teksto ilgis:', rawText.length);
+			
+			const normalizedText = this.normalizer.normalizeMarkdown(rawText);
+			this.debugLog('Tekstas normalizuotas');
+			this.currentText = normalizedText;
             
             // Skaičiuojame teksto statistiką
             this.debugLog('Pradedamas teksto statistikos skaičiavimas');
@@ -270,11 +259,10 @@ class App {
             
             // Konvertuojame į HTML
             this.debugLog('Pradedama konversija į HTML');
-            const html = await this.textProcessor.convertToHtml(normalizedText);
+            const html = await this.htmlConverter.convertToHtml(normalizedText);
             this.debugLog('HTML konversija baigta, ilgis:', html.length);
             
-            // Naudojame UIManager setContent metodą
-            await this.uiManager.setContent(html, textStats, this.currentText);
+            this.setContent(html, textStats);
 
             // Išsaugome būseną su pažymėjimais PO turinio nustatymo
             const highlights = this.textHighlighter.saveHighlights();
@@ -290,21 +278,128 @@ class App {
 
         } catch(error) {
             this.debugLog('KLAIDA apdorojant failą:', error);
-            console.error('Klaida:', error);
-            this.uiManager.showError(`Klaida: ${error.message}`); // Pakeista iš this.handleError(error)
+            this.handleError(error);
         } finally {
             this.isProcessing = false;
             this.fileInput.disabled = false;
             this.fileInput.value = '';
-            this.uiManager.hideLoadingState(); // Pakeista iš this.hideLoadingState()
+            this.hideLoadingState();
             this.debugLog('Failo apdorojimas baigtas');
         }
     }
 
+    async setContent(html, stats = {}) {
+        this.debugLog('Nustatomas naujas turinys...');
+        
+        const div = document.createElement('div');
+        div.className = 'text-content';
+
+        // Statistikos dalis
+        if (stats && Object.keys(stats).length > 0) {
+            const statsDiv = document.createElement('div');
+            statsDiv.className = 'text-stats';
+            statsDiv.innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-value">${stats.totalWords || 0}</div>
+                    <div class="stat-label">Iš viso žodžių</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.uniqueWords || 0}</div>
+                    <div class="stat-label">Unikalių žodžių</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.unknownWords || 0}</div>
+                    <div class="stat-label">Nežinomų žodžių</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${stats.unknownPercentage || 0}%</div>
+                    <div class="stat-label">Nežinomų žodžių %</div>
+                </div>
+            `;
+            div.appendChild(statsDiv);
+        }
+
+        // Tekstas su žymėjimais
+        const highlightedHtml = await this.textHighlighter.processText(this.currentText, html);
+        this.debugLog('Pažymėtas tekstas:', highlightedHtml.slice(0, 200));
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'paginated-content';
+        contentDiv.innerHTML = highlightedHtml;
+        
+        div.appendChild(contentDiv);
+        
+        const pageData = this.paginator.setContent(contentDiv.innerHTML);
+        this.debugLog('Puslapiavimo duomenys:', pageData);
+
+        contentDiv.innerHTML = pageData.content;
+        
+        this.content.replaceChildren(div);
+        this.updatePageContent(pageData);
+    }
+
+    _addWordInfoPopup(element, info) {
+        element.addEventListener('click', (e) => {
+            const popup = document.createElement('div');
+            popup.className = 'word-info-popup';
+            
+            if (info.meanings) {
+                // Homonimų rodymas
+                popup.innerHTML = `
+                    <div class="popup-title">${info.text}</div>
+                    ${info.meanings.map(meaning => `
+                        <div class="meaning-item">
+                            <div class="kalbos-dalis">${meaning["kalbos dalis"]}</div>
+                            <div>Vertimas: ${meaning.vertimas}</div>
+                            <div>Bazinė forma: ${meaning["bazinė forma"]}</div>
+                            <div>Bazės vertimas: ${meaning["bazė vertimas"]}</div>
+                            <div>CEFR: ${meaning.CEFR}</div>
+                        </div>
+                    `).join('')}
+                `;
+            } else {
+                // Paprastas žodis/frazė
+                popup.innerHTML = `
+                    <div class="popup-title">${info.text}</div>
+                    <div>Vertimas: ${info.vertimas}</div>
+                    <div>Bazinė forma: ${info["bazinė forma"]}</div>
+                    <div>Bazės vertimas: ${info["bazė vertimas"]}</div>
+                    <div>CEFR: ${info.CEFR}</div>
+                `;
+            }
+            
+            // Pozicionuojame popupą
+            popup.style.position = 'absolute';
+            popup.style.left = `${e.pageX}px`;
+            popup.style.top = `${e.pageY}px`;
+            
+            document.body.appendChild(popup);
+            
+            // Uždarome popupą paspaudus kitur
+            const closePopup = () => {
+                popup.remove();
+                document.removeEventListener('click', closePopup);
+            };
+            setTimeout(() => document.addEventListener('click', closePopup), 0);
+        });
+    }
+
     updatePageContent(pageData) {
-        // Naudojame UIManager updatePageContent metodą
-        this.uiManager.updatePageContent(pageData);
+        const contentDiv = document.querySelector('.paginated-content');
+        if (!contentDiv) return;
+        
+        contentDiv.innerHTML = pageData.content;
+        
         this.saveLastPage(pageData.currentPage);
+        
+        const pageInfo = this.paginationControls.querySelector('.page-info');
+        pageInfo.textContent = `${pageData.currentPage} / ${pageData.totalPages}`;
+        
+        // Atnaujinti slankiklį
+        this.paginator.updateSlider();
+        
+        this.paginationControls.style.display = 
+            pageData.totalPages > 1 ? 'flex' : 'none';
     }
 
     async handleExport() {
@@ -321,7 +416,7 @@ class App {
             this.debugLog('Nežinomi žodžiai eksportuoti sėkmingai');
         } catch(error) {
             console.error('Klaida eksportuojant nežinomus žodžius:', error);
-            this.uiManager.showError('Klaida eksportuojant nežinomus žodžius');
+            this.showError('Klaida eksportuojant nežinomus žodžius');
         }
     }
 
@@ -344,7 +439,7 @@ class App {
             }
         } catch (error) {
             console.error('Klaida įkeliant žodynus:', error);
-            this.uiManager.showError(`Klaida įkeliant žodyną: ${error.message}`);
+            this.showError(`Klaida įkeliant žodyną: ${error.message}`);
         }
         
         this.dictionaryInput.value = '';
@@ -360,12 +455,63 @@ class App {
         try {
             const { results, stats } = await this.dictionaryManager.findInText(text);
             this.debugLog('Paieškos laikas:', stats.searchTimeMs, 'ms');
-            
-            // Naudojame UIManager.displaySearchResults
-            this.uiManager.displaySearchResults(results);
+            this.displaySearchResults(results);
         } catch (error) {
-            this.uiManager.showError(`Klaida ieškant: ${error.message}`);
+            this.showError(`Klaida ieškant: ${error.message}`);
         }
+    }
+
+    displaySearchResults(results) {
+        if (!this.searchResults) return;
+        
+        let html = '<div class="search-results">';
+        
+        if (results.length > 0) {
+            results.forEach(result => {
+                html += `
+                    <div class="search-item ${result.type}-section">
+                        <div class="pattern">${result.pattern}</div>
+                        <div class="info">
+                            <div>Vertimas: ${result.info.vertimas}</div>
+                            <div>CEFR: ${result.info.CEFR}</div>
+                        </div>
+                        ${result.related.length > 0 ? `
+                            <div class="related">
+                                <div>Susiję:</div>
+                                ${result.related.map(r => `
+                                    <span>${r.pattern} (${r.type})</span>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+        } else {
+            html += '<div class="no-results">Nieko nerasta</div>';
+        }
+        
+        html += '</div>';
+        this.searchResults.innerHTML = html;
+    }
+
+    renderDictionaryGroup(dictionary, isPhrase) {
+        return `<div class="dictionary-group ${isPhrase ? 'phrases' : 'words'}">
+            <h4>${dictionary.dictionary}</h4>
+            ${dictionary.matches.map(match => `
+                <div class="match-item">
+                    <div class="match-header">
+                        <strong>${match.word}</strong>
+                        <span class="cefr-badge">${match.CEFR || 'N/A'}</span>
+                    </div>
+                    <div class="match-details">
+                        <div>Vertimas: ${match.vertimas}</div>
+                        <div>Kalbos dalis: ${match['kalbos dalis']}</div>
+                        <div>Bazinė forma: ${match['bazinė forma']}</div>
+                        <div>Bazės vertimas: ${match['bazė vertimas']}</div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>`;
     }
 
     updateDictionaryList() {
@@ -416,8 +562,30 @@ class App {
         }
     }
 
+    handleError(error) {
+        console.error('Klaida:', error);
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error';
+        errorDiv.textContent = `Klaida: ${error.message}`;
+        this.content.replaceChildren(errorDiv);
+    }
+
     updateProgress({ percent }) {
         this.uiManager.updateProgress(percent);
+    }
+
+    showLoadingState() {
+        this.debugLog('Rodoma įkėlimo būsena...');
+        this.uiManager.showLoadingState();
+    }
+
+    hideLoadingState() {
+        this.debugLog('Paslepiama įkėlimo būsena');
+        this.uiManager.hideLoadingState();
+    }
+
+    showError(message) {
+        this.uiManager.showError(message);
     }
 }
 
