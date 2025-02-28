@@ -1,3 +1,4 @@
+
 // main.js
 const DEBUG = true;  // arba false true kai norėsime išjungti
 
@@ -291,51 +292,14 @@ class App {
     async setContent(html, stats = {}) {
         this.debugLog('Nustatomas naujas turinys...');
         
-        const div = document.createElement('div');
-        div.className = 'text-content';
-
-        // Statistikos dalis
-        if (stats && Object.keys(stats).length > 0) {
-            const statsDiv = document.createElement('div');
-            statsDiv.className = 'text-stats';
-            statsDiv.innerHTML = `
-                <div class="stat-item">
-                    <div class="stat-value">${stats.totalWords || 0}</div>
-                    <div class="stat-label">Iš viso žodžių</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">${stats.uniqueWords || 0}</div>
-                    <div class="stat-label">Unikalių žodžių</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">${stats.unknownWords || 0}</div>
-                    <div class="stat-label">Nežinomų žodžių</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">${stats.unknownPercentage || 0}%</div>
-                    <div class="stat-label">Nežinomų žodžių %</div>
-                </div>
-            `;
-            div.appendChild(statsDiv);
-        }
-
-        // Tekstas su žymėjimais
-        const highlightedHtml = await this.textHighlighter.processText(this.currentText, html);
-        this.debugLog('Pažymėtas tekstas:', highlightedHtml.slice(0, 200));
+        // Naudojame UIManager.setContent metodą
+        const pageData = await this.uiManager.setContent(html, stats, this.currentText, {
+            textHighlighter: this.textHighlighter,
+            paginator: this.paginator,
+            onUpdatePageContent: (pageData) => this.updatePageContent(pageData)
+        });
         
-        const contentDiv = document.createElement('div');
-        contentDiv.className = 'paginated-content';
-        contentDiv.innerHTML = highlightedHtml;
-        
-        div.appendChild(contentDiv);
-        
-        const pageData = this.paginator.setContent(contentDiv.innerHTML);
-        this.debugLog('Puslapiavimo duomenys:', pageData);
-
-        contentDiv.innerHTML = pageData.content;
-        
-        this.content.replaceChildren(div);
-        this.updatePageContent(pageData);
+        return pageData;
     }
 
     _addWordInfoPopup(element, info) {
