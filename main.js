@@ -45,6 +45,7 @@ class App {
         
         this.isProcessing = false;
         this.currentText = '';
+        this.loadedFiles = new Set();
         this.currentFileName = '';
         
         // Inicializacija
@@ -118,9 +119,8 @@ class App {
             // Įkeliam žodžius ir frazes
             await this.dictionaryManager.loadDictionaries([wordsFile, phrasesFile]);
             
-            // Pažymime failus kaip įkeltus FileManager klasėje
-            this.fileManager.markFileAsLoaded('words.json');
-            this.fileManager.markFileAsLoaded('phrases.json');
+            this.loadedFiles.add('words.json');
+            this.loadedFiles.add('phrases.json');
             
             this.updateDictionaryList();
             this.updateDictionaryStats();
@@ -128,7 +128,6 @@ class App {
             this.debugLog('Numatytieji žodynai sėkmingai įkelti');
         } catch (error) {
             console.error('Klaida įkeliant žodynus:', error);
-            this.uiManager.showError(`Klaida įkeliant žodynus: ${error.message}`);
         }
     }
 
@@ -169,7 +168,7 @@ class App {
             this.currentFileName = savedState.fileName;
             this.currentText = savedState.text;
 
-            const normalizedText = this.currentText;
+            const normalizedText = this.normalizer.normalizeMarkdown(this.currentText);
             this.debugLog('Tekstas normalizuotas');
 
             // Paraleliai vykdome žodynų įkėlimą ir HTML konvertavimą
@@ -240,8 +239,11 @@ class App {
                 this.paginator.goToPage(lastPage.pageNumber);
             }
             
-            const normalizedText = await this.reader.readFile(file);
-            this.debugLog('Failas nuskaitytas, teksto ilgis:', normalizedText.length);
+            const rawText = await this.fileManager.readFile(file);
+            this.debugLog('Failas nuskaitytas, teksto ilgis:', rawText.length);
+            
+            const normalizedText = this.textProcessor.normalizeMarkdown(rawText);
+            this.debugLog('Tekstas normalizuotas');
             this.currentText = normalizedText;
             
             // Skaičiuojame teksto statistiką
@@ -328,14 +330,14 @@ class App {
         
         try {
             for (const file of files) {
-                if (this.fileManager.isFileLoaded(file.name)) {
+                if (this.loadedFiles.has(file.name)) {
                     console.warn(`Žodynas ${file.name} jau įkeltas`);
                     continue;
                 }
 
                 this.debugLog(`Įkeliamas žodynas: ${file.name}`);
                 const result = await this.dictionaryManager.loadDictionary(file);
-                this.fileManager.markFileAsLoaded(file.name);
+                this.loadedFiles.add(file.name);
                 
                 this.updateDictionaryList();
                 this.updateDictionaryStats();
@@ -344,10 +346,8 @@ class App {
             console.error('Klaida įkeliant žodynus:', error);
             this.uiManager.showError(`Klaida įkeliant žodyną: ${error.message}`);
         }
-    
-        if (this.dictionaryInput) {
-            this.dictionaryInput.value = '';
-        }
+        
+        this.dictionaryInput.value = '';
     }
 
     async handleWordSearch() {
@@ -409,7 +409,7 @@ class App {
 
     removeDictionary(name) {
         if (this.dictionaryManager.removeDictionary(name)) {
-            this.fileManager.removeLoadedFile(`${name}.json`);
+            this.loadedFiles.delete(name);
             this.updateDictionaryList();
             this.updateDictionaryStats();
             this.debugLog(`Žodynas pašalintas: ${name}`);
