@@ -283,14 +283,14 @@ class App {
         }
     }
 
-    async setContent(html, stats = {}) {
+    async setContent(html, stats = {}, options = {}) {
         this.debugLog('Nustatomas naujas turinys...');
         
         // Naudojame UIManager.setContent metodą
          const pageData = await this.uiManager.setContent(html, stats, this.currentText, {
             textHighlighter: this.textHighlighter,
             paginator: this.paginator,
-            onUpdatePageContent: (pageData) => this.updatePageContent(pageData)
+            onUpdatePageContent: (pageData) => this.updatePageContent(pageData),
             highlights: options.highlights
         });
         
