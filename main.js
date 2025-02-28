@@ -171,15 +171,9 @@ class App {
             const knownWords = this.dictionaryManager.getDictionaryWords();
             const textStats = this.textStatistics.calculateStats(this.currentText, knownWords);
 
-            // Pritaikome pažymėjimus
-            const processedHtml = await this.textHighlighter.processText(
-                this.currentText, 
-                html,
-                savedState.highlights
-            );
-
-            // Nustatome turinį ir mygtukus
-            this.setContent(processedHtml, textStats);
+            this.setContent(html, textStats, { 
+                highlights: savedState.highlights
+            });
 
             const savedTextsButton = document.getElementById('savedTextsButton');
             if (savedTextsButton) {
@@ -293,10 +287,11 @@ class App {
         this.debugLog('Nustatomas naujas turinys...');
         
         // Naudojame UIManager.setContent metodą
-        const pageData = await this.uiManager.setContent(html, stats, this.currentText, {
+         const pageData = await this.uiManager.setContent(html, stats, this.currentText, {
             textHighlighter: this.textHighlighter,
             paginator: this.paginator,
             onUpdatePageContent: (pageData) => this.updatePageContent(pageData)
+            highlights: options.highlights
         });
         
         return pageData;
