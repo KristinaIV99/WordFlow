@@ -106,13 +106,6 @@ class App {
         try {
             this.debugLog('Įkeliami numatytieji žodynai...')
             
-            // Patikriname, ar žodynai jau įkelti
-            if (this.fileManager.isFileLoaded('words.json') && 
-                this.fileManager.isFileLoaded('phrases.json')) {
-                this.debugLog('Žodynai jau įkelti, praleidžiama');
-                return;
-            }
-            
             // Pirma įkeliam visus žodynus
             const wordsResponse = await fetch('./words.json');
             const wordsBlob = await wordsResponse.blob();
