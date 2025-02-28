@@ -24,6 +24,7 @@ export class TextPaginator {
     }
 
     splitIntoPages(text) {
+		console.log("SKAIDOMAS TEKSTAS (pradžia):", text.substring(0, 200));
 		// Pašaliname HTML žymes skaičiuojant žodžius
 		const stripHtml = (html) => {
 			const tmp = document.createElement('div');
