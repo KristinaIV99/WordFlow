@@ -175,6 +175,9 @@ export class UIManager {
     async setContent(html, stats = {}, currentText = '', options = {}) {
         this.debugLog('Nustatomas naujas turinys...');
         
+        // Pridedame laiko matavimo pradžią
+        const startTime = performance.now();
+        
         const div = document.createElement('div');
         div.className = 'text-content';
 
@@ -206,11 +209,26 @@ export class UIManager {
         // Tekstas su žymėjimais
         let highlightedHtml = html;
         if (options.textHighlighter && currentText) {
-            highlightedHtml = await options.textHighlighter.processText(
-                currentText, 
-                html,
-                options.highlights // Perduodame highlights
-            );
+            // Pridedame laiko matavimą tekstų pažymėjimui
+            const highlightStartTime = performance.now();
+            
+            try {
+                // Apgaubiame su try-catch, kad apdorotume galimas klaidas
+                highlightedHtml = await options.textHighlighter.processText(
+                    currentText, 
+                    html,
+                    options.highlights // Perduodame highlights
+                );
+                
+                // Laiko matavimo pabaiga
+                const highlightEndTime = performance.now();
+                this.debugLog(`Pažymėjimas atliktas per ${(highlightEndTime - highlightStartTime).toFixed(2)}ms`);
+            } catch (error) {
+                // Klaidos atveju užfiksuojame ir naudojame originalų HTML
+                this.debugLog('KLAIDA žymint tekstą:', error);
+                // Originalus HTML jau yra highlightedHtml kintamajame
+            }
+            
             this.debugLog('Pažymėtas tekstas:', highlightedHtml.slice(0, 200));
         }
         
@@ -220,10 +238,22 @@ export class UIManager {
         
         div.appendChild(contentDiv);
         
+        // Puslapiavimas
         let pageData = { content: contentDiv.innerHTML, currentPage: 1, totalPages: 1 };
         
         if (options.paginator) {
-            pageData = options.paginator.setContent(contentDiv.innerHTML);
+            // Matuojame puslapiavimo laiką
+            const paginationStartTime = performance.now();
+            
+            try {
+                pageData = options.paginator.setContent(contentDiv.innerHTML);
+                const paginationEndTime = performance.now();
+                this.debugLog(`Puslapiavimas atliktas per ${(paginationEndTime - paginationStartTime).toFixed(2)}ms`);
+            } catch (error) {
+                this.debugLog('KLAIDA puslapiuojant turinį:', error);
+                // Klaidos atveju paliekame pageData kaip yra
+            }
+            
             this.debugLog('Puslapiavimo duomenys:', pageData);
             contentDiv.innerHTML = pageData.content;
         }
@@ -233,6 +263,10 @@ export class UIManager {
         if (options.onUpdatePageContent) {
             options.onUpdatePageContent(pageData);
         }
+        
+        // Laiko matavimo pabaiga
+        const endTime = performance.now();
+        this.debugLog(`Viso turinio nustatymas užtruko ${(endTime - startTime).toFixed(2)}ms`);
         
         return pageData;
     }
