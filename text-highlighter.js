@@ -305,33 +305,36 @@ export class TextHighlighter {
         return fragment;
     }
 
-	_filterOverlappingMatches(matches) {
+    _filterOverlappingMatches(matches) {
         const startTime = performance.now();
-		// Rūšiuojame pagal poziciją ir ilgį (ilgesni turi prioritetą)
-		matches.sort((a, b) => {
-			if (a.start === b.start) {
-				return b.word.length - a.word.length;
-			}
-			return a.start - b.start;
-		});
+        // Rūšiuojame pagal poziciją ir ilgį (ilgesni turi prioritetą)
+        matches.sort((a, b) => {
+            if (a.start === b.start) {
+                // Pataisymas: naudojame text arba word savybę priklausomai nuo to, kuri egzistuoja
+                const aLength = a.text ? a.text.length : (a.word ? a.word.length : 0);
+                const bLength = b.text ? b.text.length : (b.word ? b.word.length : 0);
+                return bLength - aLength;
+            }
+            return a.start - b.start;
+        });
 
         let comparisons = 0;
-		// Filtruojame persidengimus
-		const filteredMatches = matches.filter((match, index) => {
-			// Ar šis match nepersidengia su jokiu ankstesniu match
-			return !matches.some((otherMatch, otherIndex) => {
-				// Tikriname tik ankstesnius matches
-				if (otherIndex >= index) return false;
+        // Filtruojame persidengimus
+        const filteredMatches = matches.filter((match, index) => {
+            // Ar šis match nepersidengia su jokiu ankstesniu match
+            return !matches.some((otherMatch, otherIndex) => {
+                // Tikriname tik ankstesnius matches
+                if (otherIndex >= index) return false;
                 
-                comparisons++;
-				
-				// Ar persidengia pozicijos
-				const overlaps = !(otherMatch.end <= match.start || 
-								otherMatch.start >= match.end);
-				
-				return overlaps;
-			});
-		});
+               comparisons++;
+                
+                // Ar persidengia pozicijos
+                const overlaps = !(otherMatch.end <= match.start || 
+                                otherMatch.start >= match.end);
+                
+                return overlaps;
+            });
+        });
         
         const endTime = performance.now();
         if (matches.length > 50) {
@@ -339,7 +342,7 @@ export class TextHighlighter {
         }
         
         return filteredMatches;
-	}
+    }
 
     _handlePopup(event) {
         const startTime = performance.now();
