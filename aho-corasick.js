@@ -240,106 +240,6 @@ class AhoCorasick {
         return filteredMatches;
     }
 
-    _addMatches(currentNode, word, startPosition, currentPosition, matches) {
-        const startTime = performance.now();
-        
-        if (DEBUG) {
-            console.log(`[AhoCorasick] Tikrinami atitimenys nodelyje:`, {
-                word,
-                startPos: startPosition,
-                currentPos: currentPosition
-            });
-        }
-
-        let matchesAdded = 0;
-        for (const output of currentNode.outputs) {
-            const pattern = output.pattern;
-            const patternStart = currentPosition - pattern.length + 1;
-            
-            if (patternStart >= 0) {
-                const matchText = word.toLowerCase().slice(patternStart, currentPosition + 1);
-                
-                if (matchText === pattern && 
-                    this._isFullWord(word, patternStart, currentPosition + 1)) {
-                        
-                    if (DEBUG) {
-                        console.log(`[AhoCorasick] Rastas atitikmuo:`, {
-                            pattern,
-                            text: word.slice(patternStart, currentPosition + 1)
-                        });
-                    }
-                    
-                    matches.push({
-                        pattern: pattern,
-                        start: startPosition + patternStart,
-                        end: startPosition + currentPosition + 1,
-                        text: word.slice(patternStart, currentPosition + 1),
-                        outputs: [output],
-                        related: Array.from(currentNode.relatedPatterns)
-                    });
-                    matchesAdded++;
-                }
-            }
-        }
-        
-        const endTime = performance.now();
-        if (matchesAdded > 0) {
-            console.log(`[AhoCorasick] Pridėta ${matchesAdded} atitikmenų, užtruko: ${(endTime - startTime).toFixed(2)}ms`);
-        }
-    }
-
-    _findMatchesInWord(word, startPosition, fullText) {
-        const startTime = performance.now();
-        
-        const matches = [];
-        let node = this.root;
-        const lowerWord = word.toLowerCase();
-
-        for (let i = 0; i < lowerWord.length; i++) {
-            const char = lowerWord[i];
-            
-            while (node !== this.root && !node.next.has(char)) {
-                node = node.fail;
-            }
-            
-            node = node.next.get(char) || this.root;
-
-            if (node.isEnd) {
-                const currentPattern = node.pattern;
-                const patternLength = currentPattern.length;
-                const wordStart = i - patternLength + 1;
-                
-                if (wordStart >= 0) {
-                    const matchedText = lowerWord.slice(wordStart, i + 1);
-                    
-                    if (matchedText === currentPattern) {
-                        const absoluteStart = startPosition + wordStart;
-                        const absoluteEnd = startPosition + i + 1;
-                        
-                        if (this._isFullWord(fullText, absoluteStart, absoluteEnd)) {
-                            const match = {
-                                pattern: currentPattern,
-                                start: absoluteStart,
-                                end: absoluteEnd,
-                                text: word.slice(wordStart, i + 1),
-                                outputs: node.outputs,
-                                related: Array.from(node.relatedPatterns)
-                            };
-                            matches.push(match);
-                        }
-                    }
-                }
-            }
-        }
-
-        const endTime = performance.now();
-        if (matches.length > 0) {
-            console.log(`[AhoCorasick] Rasta ${matches.length} atitikmenų žodyje "${word}", užtruko: ${(endTime - startTime).toFixed(2)}ms`);
-        }
-        
-        return matches;
-    }
-
     _filterOverlappingMatches(matches) {
         const startTime = performance.now();
         
@@ -401,45 +301,6 @@ class AhoCorasick {
         return filtered;
     }
 
-    _splitIntoWords(text) {
-        const startTime = performance.now();
-        
-        const words = [];
-        let currentWord = '';
-        let wordStart = 0;
-
-        for (let i = 0; i < text.length; i++) {
-            const char = text[i];
-            if (this.wordBoundaryRegex.test(char)) {
-                if (currentWord.length > 0) {
-                    words.push({
-                        word: currentWord,
-                        start: wordStart
-                    });
-                    currentWord = '';
-                }
-                wordStart = i + 1;
-            } else {
-                if (currentWord.length === 0) {
-                    wordStart = i;
-                }
-                currentWord += char;
-            }
-        }
-
-        if (currentWord.length > 0) {
-            words.push({
-                word: currentWord,
-                start: wordStart
-            });
-        }
-
-        const endTime = performance.now();
-        console.log(`[AhoCorasick] Teksto skaidymas į žodžius užtruko: ${(endTime - startTime).toFixed(2)}ms, rasta ${words.length} žodžių`);
-        
-        return words;
-    }
-
     _isFullWord(text, start, end) {
         if (DEBUG) {
             const context = {
@@ -474,6 +335,25 @@ class AhoCorasick {
         }
 
         return isValidStart && isValidEnd;
+    }
+    
+    // Pridedame trūkstamą clear metodą
+    clear() {
+        const startTime = performance.now();
+        this.root = this.createNode();
+        this.ready = false;
+        this.patternCount = 0;
+        this.patterns = new Map();
+        const endTime = performance.now();
+        console.log(`[AhoCorasick] Searcher išvalymas užtruko: ${(endTime - startTime).toFixed(2)}ms`);
+    }
+    
+    // Pridedame metodą statistikos gavimui
+    getStats() {
+        return {
+            patternCount: this.patternCount,
+            ready: this.ready
+        };
     }
 }
 
