@@ -1,14 +1,12 @@
 const DEBUG = false;
 
 import { AhoCorasick } from './aho-corasick.js';
-import { DictionaryLoader } from './dictionary-loader.js';
 
 export class DictionaryManager {
     constructor() {
         this.MANAGER_NAME = '[DictionaryManager]';
         this.dictionaries = new Map();
         this.searcher = new AhoCorasick();
-        this.loader = new DictionaryLoader(); // Pridėtas loaderis
         this.statistics = {
             totalEntries: 0,
             loadedDictionaries: 0,
@@ -24,14 +22,13 @@ export class DictionaryManager {
         if (DEBUG) console.log(`${this.MANAGER_NAME} Pradedamas žodyno įkėlimas:`, file.name);
         
         try {
-            // Naudojame loader klasę
-            const text = await this.loader.readFileAsText(file);
-            const dictionary = this.loader.parseJSON(text);
+            const text = await this._readFileAsText(file);
+            const dictionary = this._parseJSON(text);
             const type = file.name.includes('phrases') ? 'phrase' : 'word';
             let entryCount = 0;
 
             for (const [word, meanings] of Object.entries(dictionary)) {
-                if (!this.loader.validateDictionaryEntry(word, meanings)) continue;
+                if (!this._validateDictionaryEntry(word, meanings)) continue;
                 
                 meanings.forEach(meaning => {
                     const entry = {
@@ -191,37 +188,67 @@ export class DictionaryManager {
     _extractWordInfo(data) {
         if (DEBUG) console.log('Extracting info from:', data);
 
-        const text = data.originalKey || data.pattern || '';
+        // Saugiai gauname tekstą
+        const text = data?.originalKey || data?.pattern || '';
         const meanings = [];
         
-        if (data.originalKey) {
+        // Jei turime originalKey, bandome surasti atitikmenis
+        if (data?.originalKey) {
+            // Naudojame originalKey kaip raktą paieškai
+            const originalKey = data.originalKey;
+            
             for (const [pattern, patternInfo] of this.searcher.patterns) {
-                if (patternInfo.data && patternInfo.data.originalKey === data.originalKey) {
+                if (patternInfo?.data?.originalKey === originalKey) {
+                    // Surenkame duomenis saugiai tikrindami kiekvieno lauko egzistavimą
                     meanings.push({
-                        "kalbos dalis": patternInfo.data["kalbos dalis"],
-                        "vertimas": patternInfo.data.vertimas,
-                        "bazinė forma": patternInfo.data["bazinė forma"],
-                        "bazė vertimas": patternInfo.data["bazė vertimas"],
-                        "CEFR": patternInfo.data.CEFR
+                        "kalbos dalis": patternInfo.data["kalbos dalis"] || '-',
+                        "vertimas": patternInfo.data.vertimas || '-',
+                        "bazinė forma": patternInfo.data["bazinė forma"] || '-',
+                        "bazė vertimas": patternInfo.data["bazė vertimas"] || '-',
+                        "CEFR": patternInfo.data.CEFR || '-'
                     });
                 }
             }
         }
 
+        // Grąžiname objektą su visais reikiamais laukais
         return {
             text: text,
-            originalText: data.text || text,
-            type: data.type || 'word',
-            pattern: data.pattern || text,
-            source: data.source,
+            originalText: data?.text || text,
+            type: data?.type || 'word',
+            pattern: data?.pattern || text,
+            source: data?.source,
             meanings: meanings.length > 0 ? meanings : [{
-                "kalbos dalis": data["kalbos dalis"] || '-',
-                "vertimas": data.vertimas || '-',
-                "bazinė forma": data["bazinė forma"] || '-',
-                "bazė vertimas": data["bazė vertimas"] || '-',
-                "CEFR": data.CEFR || '-'
+                "kalbos dalis": data?.["kalbos dalis"] || '-',
+                "vertimas": data?.vertimas || '-',
+                "bazinė forma": data?.["bazinė forma"] || '-',
+                "bazė vertimas": data?.["bazė vertimas"] || '-',
+                "CEFR": data?.CEFR || '-'
             }]
         };
+    }
+
+    _validateDictionaryEntry(key, data) {
+        if (!key || typeof key !== 'string') {
+            console.warn(`${this.MANAGER_NAME} Neteisingas raktas:`, key);
+            return false;
+        }
+
+        if (!Array.isArray(data)) {
+            console.warn(`${this.MANAGER_NAME} Neteisingas formatas, tikimasi masyvo:`, key);
+            return false;
+        }
+
+        const requiredFields = ['vertimas', 'kalbos dalis', 'bazinė forma'];
+        for (const meaning of data) {
+            const missingFields = requiredFields.filter(field => !meaning[field]);
+            if (missingFields.length > 0) {
+                console.warn(`${this.MANAGER_NAME} Trūksta laukų ${key} reikšmėje:`, missingFields);
+                return false;
+            }
+        }
+
+        return true;
     }
 
     _updateSearchStats(searchTime) {
@@ -231,6 +258,27 @@ export class DictionaryManager {
         this.statistics.searchStats.averageSearchTime = newAvg;
     }
 
+    async _readFileAsText(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.onerror = e => reject(new Error('Klaida skaitant failą'));
+            reader.readAsText(file);
+        });
+    }
+
+    _parseJSON(text) {
+        try {
+            const data = JSON.parse(text);
+            if (typeof data !== 'object' || data === null) {
+                throw new Error('Neteisingas JSON formatas - tikimasi objekto');
+            }
+            return data;
+        } catch (error) {
+            throw new Error(`Neteisingas žodyno formatas: ${error.message}`);
+        }
+    }
+
     getDictionaryList() {
         return Array.from(this.dictionaries.values());
     }
@@ -238,7 +286,7 @@ export class DictionaryManager {
     getStatistics() {
         return {
             ...this.statistics,
-            searcherStats: this.searcher.getStats ? this.searcher.getStats() : {}
+            searcherStats: this.searcher.getStats()
         };
     }
 
@@ -296,13 +344,12 @@ export class DictionaryManager {
         this.searcher = new AhoCorasick();
         
         for (const file of files) {
-            // Naudojame loader klasę
-            const text = await this.loader.readFileAsText(file);
-            const dictionary = this.loader.parseJSON(text);
+            const text = await this._readFileAsText(file);
+            const dictionary = this._parseJSON(text);
             const type = file.name.includes('phrases') ? 'phrase' : 'word';
             
             for (const [key, data] of Object.entries(dictionary)) {
-                if (!this.loader.validateDictionaryEntry(key, data)) continue;
+                if (!this._validateDictionaryEntry(key, data)) continue;
                 
                 const baseWord = key.split('_')[0];
                 const entry = { ...data, type, source: file.name, originalKey: key, baseWord };
