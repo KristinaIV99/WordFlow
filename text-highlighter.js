@@ -64,20 +64,6 @@ export class TextHighlighter {
             const searchEnd = performance.now();
             console.log(`${this.HIGHLIGHTER_NAME} Žodžių paieška užtruko: ${(searchEnd - searchStart).toFixed(2)}ms, rasta ${results.length} rezultatų`);
             
-            // HTML dokumento apdorojimas
-            const parseStart = performance.now();
-            const doc = new DOMParser().parseFromString(html, 'text/html');
-            const parseEnd = performance.now();
-            console.log(`${this.HIGHLIGHTER_NAME} HTML dokumento apdorojimas užtruko: ${(parseEnd - parseStart).toFixed(2)}ms`);
-
-            const controlsStart = performance.now();
-            const paginationControls = doc.querySelector('.pagination-controls');
-            if (paginationControls) {
-                paginationControls.remove();
-            }
-            const controlsEnd = performance.now();
-            console.log(`${this.HIGHLIGHTER_NAME} Puslapiavimo kontrolių apdorojimas užtruko: ${(controlsEnd - controlsStart).toFixed(2)}ms`);
-
             // Šablonų apdorojimas
             const patternsStart = performance.now();
             const patterns = {};
@@ -94,13 +80,34 @@ export class TextHighlighter {
             });
 
             const sortedPatterns = Object.entries(patterns).sort((a, b) => b[1].length - a[1].length);
+            const patternsObj = Object.fromEntries(sortedPatterns);
             if (DEBUG) console.log('Surūšiuoti šablonai:', sortedPatterns);
             const patternsEnd = performance.now();
             console.log(`${this.HIGHLIGHTER_NAME} Šablonų apdorojimas užtruko: ${(patternsEnd - patternsStart).toFixed(2)}ms, unikalių šablonų: ${Object.keys(patterns).length}`);
 
-            // Žymėjimas
+            // NAUJAS ŽINGSNIS: Sukuriame žymių žemėlapį
+            const markupMapStart = performance.now();
+            const markupMap = await this._createMarkupMap(text, patternsObj);
+            const markupMapEnd = performance.now();
+            console.log(`${this.HIGHLIGHTER_NAME} Žymių žemėlapio ruošimas užtruko: ${(markupMapEnd - markupMapStart).toFixed(2)}ms`);
+            
+            // HTML dokumento apdorojimas
+            const parseStart = performance.now();
+            const doc = new DOMParser().parseFromString(html, 'text/html');
+            const parseEnd = performance.now();
+            console.log(`${this.HIGHLIGHTER_NAME} HTML dokumento apdorojimas užtruko: ${(parseEnd - parseStart).toFixed(2)}ms`);
+
+            const controlsStart = performance.now();
+            const paginationControls = doc.querySelector('.pagination-controls');
+            if (paginationControls) {
+                paginationControls.remove();
+            }
+            const controlsEnd = performance.now();
+           console.log(`${this.HIGHLIGHTER_NAME} Puslapiavimo kontrolių apdorojimas užtruko: ${(controlsEnd - controlsStart).toFixed(2)}ms`);
+
+            // Vietoj _processNode, naudosime naują metodą, kuris naudoja žymių žemėlapį
             const processStart = performance.now();
-            this._processNode(doc.body, Object.fromEntries(sortedPatterns));
+            this._applyMarkupMap(doc.body, markupMap);
             const processEnd = performance.now();
             console.log(`${this.HIGHLIGHTER_NAME} Žymėjimo procesas užtruko: ${(processEnd - processStart).toFixed(2)}ms`);
 
@@ -483,4 +490,167 @@ export class TextHighlighter {
             console.log(`${this.HIGHLIGHTER_NAME} Visų popup šalinimas užtruko: ${(endTime - startTime).toFixed(2)}ms, pašalinta: ${popups.length}`);
         }
     }
+
+    async _createMarkupMap(text, patterns) {
+        const startTime = performance.now();
+        
+        // Sukuriame bazinį HTML iš teksto
+        const tempDoc = document.createElement('div');
+        tempDoc.innerHTML = text;
+        
+        // Žemėlapis, kuriame saugosime rastas žymėjimo vietas
+        const markupMap = [];
+        
+        // Analizuojame grynąjį tekstą
+        const plainText = tempDoc.textContent;
+        
+        // Ieškome kiekvieno žodžio grynajame tekste
+        Object.entries(patterns).forEach(([pattern, info]) => {
+            let index = 0;
+            const lowerText = plainText.toLowerCase();
+            const lowerPattern = pattern.toLowerCase();
+            
+            while ((index = lowerText.indexOf(lowerPattern, index)) !== -1) {
+                // Tikriname, ar tai pilnas žodis
+                if (this._isFullWord(plainText, index, index + lowerPattern.length)) {
+                    markupMap.push({
+                        start: index,
+                        end: index + lowerPattern.length,
+                        text: plainText.slice(index, index + lowerPattern.length),
+                        pattern: pattern,
+                        info: info
+                    });
+                }
+                index += 1;
+            }
+        });
+        
+        // Surūšiuojame markupMap pagal start poziciją
+        markupMap.sort((a, b) => a.start - b.start);
+        
+        // Filtruojame persidengimus
+        const filteredMap = this._filterOverlappingMatches(markupMap);
+        
+        const endTime = performance.now();
+        console.log(`${this.HIGHLIGHTER_NAME} Žymių žemėlapio sukūrimas užtruko: ${(endTime - startTime).toFixed(2)}ms, rasta ${filteredMap.length} žymėtinų vietų`);
+        
+        return filteredMap;
+    }
+
+    // Papildomas pagalbinis metodas žodžio riboms patikrinti
+    _isFullWord(text, start, end) {
+        const wordBoundaryRegex = /[\s.,!?;:'"„"\(\)\[\]{}<>\/\-—–]/;
+        
+        function isWordBoundary(char) {
+            return !char || wordBoundaryRegex.test(char);
+        }
+        
+        const prevChar = start > 0 ? text[start - 1] : ' ';
+        const nextChar = end < text.length ? text[end] : ' ';
+        return isWordBoundary(prevChar) && isWordBoundary(nextChar);
+    }
+
+_applyMarkupMap(rootNode, markupMap) {
+    const startTime = performance.now();
+    
+    // Surenkame visus teksto mazgus
+    const textNodes = [];
+    this._collectTextNodes(rootNode, textNodes);
+    
+    console.log(`${this.HIGHLIGHTER_NAME} Rasta ${textNodes.length} teksto mazgų`);
+    
+    // Taikome žymių žemėlapį teksto mazgams
+    let processedNodes = 0;
+    
+    textNodes.forEach(node => {
+        if (this._isInPaginationControls(node)) return;
+        
+        // Žiūrime, kurie markup elementai patenka į šį teksto mazgą
+        const nodeMarkups = markupMap.filter(markup => {
+            const nodeText = node.textContent;
+            const markupText = markup.text.toLowerCase();
+            const nodeTextLower = nodeText.toLowerCase();
+            
+            // Ieškome ar šis mazgas turi pažymėtiną tekstą
+            return nodeTextLower.includes(markupText);
+        });
+        
+        if (nodeMarkups.length > 0) {
+            // Turime ką pažymėti šiame mazge
+            const fragment = this._createHighlightedFragment(node.textContent, nodeMarkups);
+            node.parentNode.replaceChild(fragment, node);
+            processedNodes++;
+        }
+    });
+    
+    const endTime = performance.now();
+    console.log(`${this.HIGHLIGHTER_NAME} Žymių žemėlapio taikymas užtruko: ${(endTime - startTime).toFixed(2)}ms, apdorota ${processedNodes} mazgų iš ${textNodes.length}`);
+}
+
+// Pagalbinis metodas teksto mazgams surinkti
+_collectTextNodes(node, textNodes) {
+    if (node.nodeType === Node.TEXT_NODE) {
+        if (node.textContent.trim()) {
+            textNodes.push(node);
+        }
+    } else if (node.childNodes && !node.classList?.contains('pagination-controls')) {
+        Array.from(node.childNodes).forEach(child => {
+            this._collectTextNodes(child, textNodes);
+        });
+    }
+}
+
+// Pagalbinis metodas fragmentui su pažymėjimais sukurti
+_createHighlightedFragment(text, markups) {
+    const fragment = document.createDocumentFragment();
+    let lastIndex = 0;
+    
+    // Surūšiuojame pagal pradžios poziciją
+    markups.sort((a, b) => a.start - b.start);
+    
+    markups.forEach(markup => {
+        const markupTextLower = markup.text.toLowerCase();
+        const textLower = text.toLowerCase();
+        
+        let index = textLower.indexOf(markupTextLower, lastIndex);
+        if (index === -1) return;
+        
+        // Pridedame tekstą prieš šį markup
+        if (index > lastIndex) {
+            fragment.appendChild(
+                document.createTextNode(text.slice(lastIndex, index))
+            );
+        }
+        
+        // Sukuriame span su pažymėjimu
+        const span = document.createElement('span');
+        span.className = markup.info.type === 'phrase' ? 'highlight-phrase' : 'highlight-word';
+        span.textContent = text.slice(index, index + markup.text.length);
+        
+        // Pridedame duomenis apie pažymėjimą
+        span.dataset.info = JSON.stringify({
+            text: markup.text,
+            type: markup.info.type,
+            meanings: markup.info.info?.meanings || [{
+                "vertimas": markup.info.info?.vertimas || '-',
+                "kalbos dalis": markup.info.info?.["kalbos dalis"] || '-',
+                "bazinė forma": markup.info.info?.["bazinė forma"] || '-',
+                "bazė vertimas": markup.info.info?.["bazė vertimas"] || '-',
+                "CEFR": markup.info.info?.CEFR || '-'
+            }]
+        });
+        
+        fragment.appendChild(span);
+        lastIndex = index + markup.text.length;
+    });
+    
+    // Pridedame likusį tekstą po paskutinio markup
+    if (lastIndex < text.length) {
+        fragment.appendChild(
+            document.createTextNode(text.slice(lastIndex))
+        );
+    }
+    
+    return fragment;
+}
 }
