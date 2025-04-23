@@ -653,4 +653,3 @@ _createHighlightedFragment(text, markups) {
     
     return fragment;
 }
-}
