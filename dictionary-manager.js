@@ -1,16 +1,15 @@
-const DEBUG = false;
+const DEBUG = true; // Laikinai įjungiamas debug režimas
 
 import { AhoCorasick } from './aho-corasick.js';
 import { DictionaryLoader } from './dictionary-loader.js';
-import { DictionarySearch } from './dictionary-search.js';
+import { Logger } from './logger.js';
 
 export class DictionaryManager {
     constructor() {
         this.MANAGER_NAME = '[DictionaryManager]';
         this.dictionaries = new Map();
         this.searcher = new AhoCorasick();
-        this.loader = new DictionaryLoader();
-        this.search = new DictionarySearch(this.searcher); // Pridėta search instancija
+        this.loader = new DictionaryLoader(); // Naujas loader
         this.statistics = {
             totalEntries: 0,
             loadedDictionaries: 0,
@@ -26,6 +25,7 @@ export class DictionaryManager {
         if (DEBUG) console.log(`${this.MANAGER_NAME} Pradedamas žodyno įkėlimas:`, file.name);
         
         try {
+            // Naudojame loader
             const text = await this.loader.readFileAsText(file);
             const dictionary = this.loader.parseJSON(text);
             const type = file.name.includes('phrases') ? 'phrase' : 'word';
@@ -79,10 +79,60 @@ export class DictionaryManager {
         }
     }
 
-    // Naudojama DictionarySearch klasė
     async findInText(text) {
         if (DEBUG) console.log(`${this.MANAGER_NAME} Pradedama teksto analizė, teksto ilgis:`, text.length);
-        return await this.search.findInText(text);
+
+        try {
+            // Išsaugome searcher.search() rezultatus
+            const matches = this.searcher.search(text);
+            
+            // Logginame matches išsamiai, kad suprastume ką grąžina AhoCorasick
+            Logger.log('AhoCorasick Rezultatai', matches);
+            
+            // Taip pat logginame patį searcher objektą
+            Logger.log('Searcher Objektas', {
+                patterns: this.searcher.patterns ? true : false,
+                ready: this.searcher.ready
+            });
+
+            const results = matches.map(match => {
+                if (DEBUG) console.log('Apdorojamas match:', match);
+                
+                const result = {
+                    pattern: match.pattern,
+                    type: match.type,
+                    info: {
+                        meanings: match.outputs.map(output => ({
+                            "vertimas": output.vertimas || '-',
+                            "kalbos dalis": output["kalbos dalis"] || '-',
+                            "bazinė forma": output["bazinė forma"] || '-',
+                            "bazė vertimas": output["bazė vertimas"] || '-',
+                            "CEFR": output.CEFR || '-'
+                        }))
+                    },
+                    positions: [{
+                        start: match.start,
+                        end: match.end,
+                        text: match.text
+                    }]
+                };
+                
+                // Logginame kiekvieną pagamintą rezultatą
+                Logger.log('Rezultatas', result);
+                return result;
+            });
+
+            if (DEBUG) console.log('Apdoroti results:', results);
+            
+            // Logginame rezultatų objektą
+            Logger.log('Visi Rezultatai', { results });
+            
+            return { results };
+            
+        } catch (error) {
+            console.error(`${this.MANAGER_NAME} Klaida:`, error);
+            throw error;
+        }
     }
 
     _processSearchResults(matches) {
@@ -193,16 +243,20 @@ export class DictionaryManager {
         };
     }
 
+    _updateSearchStats(searchTime) {
+        this.statistics.searchStats.totalSearches++;
+        const prevAvg = this.statistics.searchStats.averageSearchTime;
+        const newAvg = prevAvg + (searchTime - prevAvg) / this.statistics.searchStats.totalSearches;
+        this.statistics.searchStats.averageSearchTime = newAvg;
+    }
+
     getDictionaryList() {
         return Array.from(this.dictionaries.values());
     }
 
     getStatistics() {
-        // Įtraukiame search statistiką
-        const searchStats = this.search.getSearchStats();
         return {
             ...this.statistics,
-            searchStats,
             searcherStats: this.searcher.getStats ? this.searcher.getStats() : {}
         };
     }
