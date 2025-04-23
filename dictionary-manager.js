@@ -2,15 +2,13 @@ const DEBUG = false;
 
 import { AhoCorasick } from './aho-corasick.js';
 import { DictionaryLoader } from './dictionary-loader.js';
-import { DictionarySearch } from './dictionary-search.js';
 
 export class DictionaryManager {
     constructor() {
         this.MANAGER_NAME = '[DictionaryManager]';
         this.dictionaries = new Map();
         this.searcher = new AhoCorasick();
-        this.loader = new DictionaryLoader();
-        this.search = new DictionarySearch(this.searcher); // Pridėta search instancija
+        this.loader = new DictionaryLoader(); // Pridėtas loaderis
         this.statistics = {
             totalEntries: 0,
             loadedDictionaries: 0,
@@ -26,6 +24,7 @@ export class DictionaryManager {
         if (DEBUG) console.log(`${this.MANAGER_NAME} Pradedamas žodyno įkėlimas:`, file.name);
         
         try {
+            // Naudojame loader klasę
             const text = await this.loader.readFileAsText(file);
             const dictionary = this.loader.parseJSON(text);
             const type = file.name.includes('phrases') ? 'phrase' : 'word';
@@ -79,23 +78,8 @@ export class DictionaryManager {
         }
     }
 
-    // Naudojame DictionarySearch klasę, bet išsaugome originalų metodą kaip atsarginį
     async findInText(text) {
         if (DEBUG) console.log(`${this.MANAGER_NAME} Pradedama teksto analizė, teksto ilgis:`, text.length);
-        
-        try {
-            // Naudojame search.findInText, bet jei įvyktų klaida, grįžtame prie originalaus metodo
-            const result = await this.search.findInText(text);
-            return result;
-        } catch (error) {
-            console.error(`${this.MANAGER_NAME} Klaida naudojant search.findInText, grįžtama prie originalaus metodo:`, error);
-            return this._originalFindInText(text);
-        }
-    }
-
-    // Išsaugome originalią logiką kaip atsarginį metodą
-    async _originalFindInText(text) {
-        if (DEBUG) console.log(`${this.MANAGER_NAME} Naudojamas originalus findInText, teksto ilgis:`, text.length);
 
         try {
             const matches = this.searcher.search(text);
@@ -252,10 +236,8 @@ export class DictionaryManager {
     }
 
     getStatistics() {
-        // Įtraukiame search statistiką
         return {
             ...this.statistics,
-            searchStats: this.search.getSearchStats(),
             searcherStats: this.searcher.getStats ? this.searcher.getStats() : {}
         };
     }
@@ -314,6 +296,7 @@ export class DictionaryManager {
         this.searcher = new AhoCorasick();
         
         for (const file of files) {
+            // Naudojame loader klasę
             const text = await this.loader.readFileAsText(file);
             const dictionary = this.loader.parseJSON(text);
             const type = file.name.includes('phrases') ? 'phrase' : 'word';
