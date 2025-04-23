@@ -2,13 +2,15 @@ const DEBUG = false;
 
 import { AhoCorasick } from './aho-corasick.js';
 import { DictionaryLoader } from './dictionary-loader.js';
+import { DictionarySearch } from './dictionary-search.js';
 
 export class DictionaryManager {
     constructor() {
         this.MANAGER_NAME = '[DictionaryManager]';
         this.dictionaries = new Map();
         this.searcher = new AhoCorasick();
-        this.loader = new DictionaryLoader(); // Pridėtas loaderis
+        this.loader = new DictionaryLoader();
+        this.search = new DictionarySearch(this.searcher); // Pridėta search instancija
         this.statistics = {
             totalEntries: 0,
             loadedDictionaries: 0,
@@ -24,7 +26,6 @@ export class DictionaryManager {
         if (DEBUG) console.log(`${this.MANAGER_NAME} Pradedamas žodyno įkėlimas:`, file.name);
         
         try {
-            // Naudojame loader klasę
             const text = await this.loader.readFileAsText(file);
             const dictionary = this.loader.parseJSON(text);
             const type = file.name.includes('phrases') ? 'phrase' : 'word';
@@ -78,42 +79,10 @@ export class DictionaryManager {
         }
     }
 
+    // Naudojama DictionarySearch klasė
     async findInText(text) {
         if (DEBUG) console.log(`${this.MANAGER_NAME} Pradedama teksto analizė, teksto ilgis:`, text.length);
-
-        try {
-            const matches = this.searcher.search(text);
-            if (DEBUG) console.log('Gauti matches iš searcher:', matches);
-
-            const results = matches.map(match => {
-                if (DEBUG) console.log('Apdorojamas match:', match);
-                return {
-                    pattern: match.pattern,
-                    type: match.type,
-                    info: {
-                        meanings: match.outputs.map(output => ({
-                            "vertimas": output.vertimas || '-',
-                            "kalbos dalis": output["kalbos dalis"] || '-',
-                            "bazinė forma": output["bazinė forma"] || '-',
-                            "bazė vertimas": output["bazė vertimas"] || '-',
-                            "CEFR": output.CEFR || '-'
-                        }))
-                    },
-                    positions: [{
-                        start: match.start,
-                        end: match.end,
-                        text: match.text
-                    }]
-                };
-            });
-
-            if (DEBUG) console.log('Apdoroti results:', results);
-            return { results };
-            
-        } catch (error) {
-            console.error(`${this.MANAGER_NAME} Klaida:`, error);
-            throw error;
-        }
+        return await this.search.findInText(text);
     }
 
     _processSearchResults(matches) {
@@ -224,20 +193,16 @@ export class DictionaryManager {
         };
     }
 
-    _updateSearchStats(searchTime) {
-        this.statistics.searchStats.totalSearches++;
-        const prevAvg = this.statistics.searchStats.averageSearchTime;
-        const newAvg = prevAvg + (searchTime - prevAvg) / this.statistics.searchStats.totalSearches;
-        this.statistics.searchStats.averageSearchTime = newAvg;
-    }
-
     getDictionaryList() {
         return Array.from(this.dictionaries.values());
     }
 
     getStatistics() {
+        // Įtraukiame search statistiką
+        const searchStats = this.search.getSearchStats();
         return {
             ...this.statistics,
+            searchStats,
             searcherStats: this.searcher.getStats ? this.searcher.getStats() : {}
         };
     }
@@ -296,7 +261,6 @@ export class DictionaryManager {
         this.searcher = new AhoCorasick();
         
         for (const file of files) {
-            // Naudojame loader klasę
             const text = await this.loader.readFileAsText(file);
             const dictionary = this.loader.parseJSON(text);
             const type = file.name.includes('phrases') ? 'phrase' : 'word';
