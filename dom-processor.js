@@ -1,11 +1,19 @@
 // dom-processor.js
-// DOM medžio apdorojimo ir žymėjimo logika
+// DOM medžio apdorojimo ir žymėjimo logika - optimizuota versija
 
 const DEBUG = false;
 
 export class DomProcessor {
     constructor() {
         this.DOM_PROCESSOR_NAME = '[DomProcessor]';
+        
+        // Sukuriame span šablonus, kad nereikėtų kurti naujų elementų kiekvieną kartą
+        this.spanTemplates = {
+            'word': document.createElement('span'),
+            'phrase': document.createElement('span')
+        };
+        this.spanTemplates['word'].className = 'highlight-word';
+        this.spanTemplates['phrase'].className = 'highlight-phrase';
     }
 
     debugLog(...args) {
@@ -26,15 +34,25 @@ export class DomProcessor {
             if (node.nodeType === Node.TEXT_NODE && !this._isInPaginationControls(node)) {
                 nodesProcessed.textNodes++;
                 const text = node.textContent;
+                
+                // Optimizuota: tikrinti, ar reikia apdoroti tekstą
+                // Jei tekste nėra žodžių, neatliekame brangių DOM operacijų
+                if (text.trim().length === 0) {
+                    return;
+                }
+                
                 const newNode = this._highlightWords(text, words);
                 if (newNode) {
                     node.parentNode.replaceChild(newNode, node);
                 }
             } else if (node.childNodes && !node.classList?.contains('pagination-controls')) {
                 nodesProcessed.elementNodes++;
-                Array.from(node.childNodes).forEach(child => {
-                    processNodeInternal(child);
-                });
+                
+                // Optimizuota: naudojame masyvą vietoj nodelisto konvertavimo
+                const childNodes = Array.from(node.childNodes);
+                for (let i = 0; i < childNodes.length; i++) {
+                    processNodeInternal(childNodes[i]);
+                }
             }
             
             // Periodiniai pranešimai apie progresą
@@ -75,19 +93,69 @@ export class DomProcessor {
             return isWordBoundary(prevChar) && isWordBoundary(nextChar);
         }
 
-        // Žodžių paieška
-        const matchStart = performance.now();
+        // Greitai tikriname, ar yra bent vienas galimas atitikmuo šiame tekste
+        // Tai padeda išvengti brangių operacijų, jei tekste nėra tinkamų žodžių
+        const wordKeys = Object.keys(words);
+        let hasAnyPotentialMatch = false;
+        const lowerText = text.toLowerCase();
+        
+        // Greitas pirminė patikra, ar yra bent vienas potencialus atitikmuo
+        for (let i = 0; i < wordKeys.length && !hasAnyPotentialMatch; i++) {
+            if (lowerText.includes(wordKeys[i])) {
+                hasAnyPotentialMatch = true;
+            }
+        }
+        
+        // Jei nėra potencialių atitikmenų, grąžiname originalų tekstą
+        if (!hasAnyPotentialMatch) {
+            return document.createTextNode(text);
+        }
+
+        // Žodžių paieška ir filtravimas - optimizuota versija
+        const matches = this._findMatches(text, words, isFullWord);
+        
+        // Jei nėra atitikmenų, grąžiname originalų tekstą
+        if (matches.length === 0) {
+            return document.createTextNode(text);
+        }
+
+        // Filtruojame persidengimus
+        const filteredMatches = this._filterOverlappingMatches(matches);
+        
+        if (filteredMatches.length === 0) {
+            return document.createTextNode(text);
+        }
+        
+        // DOM fragmento kūrimas - optimizuota
+        const fragment = this._createFragment(text, filteredMatches);
+
+        const endTime = performance.now();
+        if (matches.length > 0) {
+            console.log(`${this.DOM_PROCESSOR_NAME} Žodžių žymėjimas užtruko: ${(endTime - startTime).toFixed(2)}ms, pažymėta ${filteredMatches.length} žodžių`);
+        }
+        
+        return fragment;
+    }
+
+    _findMatches(text, words, isFullWordCallback) {
+        const startTime = performance.now();
         const matches = [];
         let totalComparisons = 0;
         
-        Object.keys(words).forEach(word => {
-            let index = 0;
-            const lowerText = text.toLowerCase();
+        const lowerText = text.toLowerCase();
+        
+        // Optimizuota žodžių paieška
+        for (const word in words) {
+            // Peršokame tuščius žodžius
+            if (!word || word.length === 0) continue;
             
+            let index = 0;
+            
+            // Naudojame String.indexOf visiems žodžiams viename cikle
             while ((index = lowerText.indexOf(word, index)) !== -1) {
                 totalComparisons++;
                 
-                if (isFullWord(text, index, index + word.length)) {
+                if (isFullWordCallback(text, index, index + word.length)) {
                     matches.push({
                         start: index,
                         end: index + word.length,
@@ -97,49 +165,95 @@ export class DomProcessor {
                 }
                 index += 1;
             }
-        });
-        const matchEnd = performance.now();
+        }
         
+        const endTime = performance.now();
         if (matches.length > 0 || totalComparisons > 1000) {
-            console.log(`${this.DOM_PROCESSOR_NAME} Žodžių paieška tekste užtruko: ${(matchEnd - matchStart).toFixed(2)}ms, rasta ${matches.length} atitikmenų iš ${totalComparisons} palyginimų`);
+            console.log(`${this.DOM_PROCESSOR_NAME} Žodžių paieška tekste užtruko: ${(endTime - startTime).toFixed(2)}ms, rasta ${matches.length} atitikmenų iš ${totalComparisons} palyginimų`);
         }
-
-        // Rūšiavimas
-        const sortStart = performance.now();
-        matches.sort((a, b) => a.start - b.start);
-        const sortEnd = performance.now();
         
-        if (matches.length > 100) {
-            console.log(`${this.DOM_PROCESSOR_NAME} Atitikmenų rūšiavimas užtruko: ${(sortEnd - sortStart).toFixed(2)}ms`);
-        }
+        return matches;
+    }
 
-        // Persidengimų filtravimas
-        const filterStart = performance.now();
-        const filteredMatches = this._filterOverlappingMatches(matches);
-        const filterEnd = performance.now();
+    _filterOverlappingMatches(matches) {
+        const startTime = performance.now();
         
-        if (matches.length > 0) {
-            console.log(`${this.DOM_PROCESSOR_NAME} Persidengimų filtravimas užtruko: ${(filterEnd - filterStart).toFixed(2)}ms, atmesta ${matches.length - filteredMatches.length} persidengimų`);
+        // Jei yra mažai atitikmenų, nereikia optimizacijos
+        if (matches.length <= 1) {
+            return matches;
         }
+        
+        // Rūšiuojame pagal tipą (frazės prieš žodžius), pradžią ir ilgį
+        matches.sort((a, b) => {
+            if (a.type === 'phrase' && b.type !== 'phrase') return -1;
+            if (a.type !== 'phrase' && b.type === 'phrase') return 1;
+            
+            if (a.start === b.start) {
+                return b.word.length - a.word.length;
+            }
+            return a.start - b.start;
+        });
 
-        // DOM fragmento kūrimas
-        const fragmentStart = performance.now();
+        // Optimizuotas persidengimų algoritmas
+        const filtered = [];
+        let lastEnd = -1;  // Paskutinio pridėto elemento pabaiga
+        
+        // Greitesnis algoritmas, tinkamas daugumai atvejų
+        for (let i = 0; i < matches.length; i++) {
+            const match = matches[i];
+            
+            // Jei šis match prasideda už paskutinio pabaigos, jis nepersidengia
+            if (match.start >= lastEnd) {
+                filtered.push(match);
+                lastEnd = match.end;
+                continue;
+            }
+            
+            // Tikrinti persidengimą su jau pridėtais elementais
+            let hasOverlap = false;
+            for (let j = 0; j < filtered.length; j++) {
+                const existingMatch = filtered[j];
+                if (!(match.end <= existingMatch.start || match.start >= existingMatch.end)) {
+                    hasOverlap = true;
+                    break;
+                }
+            }
+            
+            if (!hasOverlap) {
+                filtered.push(match);
+                lastEnd = Math.max(lastEnd, match.end);
+            }
+        }
+        
+        const endTime = performance.now();
+        if (matches.length > 10) {
+            console.log(`${this.DOM_PROCESSOR_NAME} Persidengimų filtravimas užtruko: ${(endTime - startTime).toFixed(2)}ms, liko ${filtered.length} iš ${matches.length}`);
+        }
+        
+        return filtered;
+    }
+
+    _createFragment(text, matches) {
+        // Jei nėra atitikmenų, grąžiname tekstą
+        if (matches.length === 0) {
+            return document.createTextNode(text);
+        }
+        
         const fragment = document.createDocumentFragment();
         let lastIndex = 0;
 
-        filteredMatches.forEach(match => {
+        for (const match of matches) {
+            // Pridėti tekstą prieš atitikmenį
             if (match.start > lastIndex) {
-                fragment.appendChild(
-                    document.createTextNode(text.slice(lastIndex, match.start))
-                );
+                fragment.appendChild(document.createTextNode(text.slice(lastIndex, match.start)));
             }
 
-            const span = document.createElement('span');
-            span.className = match.type === 'phrase' ? 'highlight-phrase' : 'highlight-word';
+            // Naudojame iš anksto sukurtų šablonų klonavimą, kas yra greičiau
+            const type = match.type || 'word';
+            const span = this.spanTemplates[type].cloneNode(false);
             span.textContent = match.word;
             
-            if (DEBUG) console.log('Match info:', match.info);
-            
+            // Duomenys bus naudojami popup lange
             const meanings = match.info?.meanings || [{
                 "vertimas": match.info?.vertimas || '-',
                 "kalbos dalis": match.info?.["kalbos dalis"] || '-',
@@ -156,60 +270,13 @@ export class DomProcessor {
 
             fragment.appendChild(span);
             lastIndex = match.end;
-        });
+        }
 
+        // Pridedame likusį tekstą
         if (lastIndex < text.length) {
-            fragment.appendChild(
-                document.createTextNode(text.slice(lastIndex))
-            );
-        }
-        const fragmentEnd = performance.now();
-        
-        if (filteredMatches.length > 10) {
-            console.log(`${this.DOM_PROCESSOR_NAME} DOM fragmento kūrimas užtruko: ${(fragmentEnd - fragmentStart).toFixed(2)}ms, sukurta ${filteredMatches.length} pažymėtų elementų`);
-        }
-
-        const endTime = performance.now();
-        if (matches.length > 0) {
-            console.log(`${this.DOM_PROCESSOR_NAME} Žodžių žymėjimas užtruko: ${(endTime - startTime).toFixed(2)}ms, pažymėta ${filteredMatches.length} žodžių`);
+            fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
         }
         
         return fragment;
-    }
-
-    _filterOverlappingMatches(matches) {
-        const startTime = performance.now();
-        // Rūšiuojame pagal poziciją ir ilgį (ilgesni turi prioritetą)
-        matches.sort((a, b) => {
-            if (a.start === b.start) {
-                return b.word.length - a.word.length;
-            }
-            return a.start - b.start;
-        });
-
-        let comparisons = 0;
-        // Filtruojame persidengimus
-        const filteredMatches = matches.filter((match, index) => {
-            // Ar šis match nepersidengia su jokiu ankstesniu match
-            return !matches.some((otherMatch, otherIndex) => {
-                // Tikriname tik ankstesnius matches
-                if (otherIndex >= index) return false;
-                
-                comparisons++;
-                
-                // Ar persidengia pozicijos
-                const overlaps = !(otherMatch.end <= match.start || 
-                                otherMatch.start >= match.end);
-                
-                return overlaps;
-            });
-        });
-        
-        const endTime = performance.now();
-        if (matches.length > 50) {
-            console.log(`${this.DOM_PROCESSOR_NAME} Persidengimų filtravimas užtruko: ${(endTime - startTime).toFixed(2)}ms, atlikta ${comparisons} palyginimų, liko ${filteredMatches.length} iš ${matches.length}`);
-        }
-        
-        return filteredMatches;
     }
 }
