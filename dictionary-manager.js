@@ -24,10 +24,8 @@ export class DictionaryManager {
         if (DEBUG) console.log(`${this.MANAGER_NAME} Pradedamas žodyno įkėlimas:`, file.name);
         
         try {
-            // Naudojame loader metodus
-            const text = await this.loader.readFileAsText(file);
-            const dictionary = this.loader.parseJSON(text);
-            const type = file.name.includes('phrases') ? 'phrase' : 'word';
+            // Naudojame loader
+            const { dictionary, type, loadTimeMs } = await this.loader.loadDictionary(file);
             
             let entryCount = 0;
 
@@ -197,7 +195,7 @@ export class DictionaryManager {
         
         if (data.originalKey) {
             for (const [pattern, patternInfo] of this.searcher.patterns) {
-                if (patternInfo.data && patternInfo.data.originalKey === data.originalKey) {
+                if (patternInfo.data.originalKey === data.originalKey) {
                     meanings.push({
                         "kalbos dalis": patternInfo.data["kalbos dalis"],
                         "vertimas": patternInfo.data.vertimas,
@@ -256,9 +254,7 @@ export class DictionaryManager {
     }
 
     _rebuildDictionaries() {
-        if (this.searcher.clear) {
-            this.searcher.clear();
-        }
+        this.searcher.clear();
         const existingDictionaries = Array.from(this.dictionaries.values());
         
         for (const dict of existingDictionaries) {
@@ -268,9 +264,7 @@ export class DictionaryManager {
 
     clearAll() {
         this.dictionaries.clear();
-        if (this.searcher.clear) {
-            this.searcher.clear();
-        }
+        this.searcher.clear();
         this.statistics = {
             totalEntries: 0,
             loadedDictionaries: 0,
@@ -284,13 +278,11 @@ export class DictionaryManager {
     getDictionaryWords() {
         const words = new Map();
         
-        if (DEBUG) console.log('Pradinis žodžių kiekis:', this.searcher.patterns ? this.searcher.patterns.size : 0);
+        if (DEBUG) console.log('Pradinis žodžių kiekis:', this.searcher.patterns.size);
         
-        if (this.searcher.patterns) {
-            for (const [pattern, data] of this.searcher.patterns) {
-                if (data?.data?.type === 'word') {
-                    words.set(pattern, data.data);
-                }
+        for (const [pattern, data] of this.searcher.patterns) {
+            if (data?.data?.type === 'word') {
+                words.set(pattern, data.data);
             }
         }
         
@@ -303,28 +295,22 @@ export class DictionaryManager {
         this.searcher = new AhoCorasick();
         
         for (const file of files) {
-            try {
-                const text = await this.loader.readFileAsText(file);
-                const dictionary = this.loader.parseJSON(text);
-                const type = file.name.includes('phrases') ? 'phrase' : 'word';
+            const { dictionary, type } = await this.loader.loadDictionary(file);
+            
+            for (const [key, data] of Object.entries(dictionary)) {
+                if (!this.loader.validateDictionaryEntry(key, data)) continue;
                 
-                for (const [key, data] of Object.entries(dictionary)) {
-                    if (!this.loader.validateDictionaryEntry(key, data)) continue;
-                    
-                    const baseWord = key.split('_')[0];
-                    const entry = { ...data, type, source: file.name, originalKey: key, baseWord };
-                    this.searcher.addPattern(baseWord, entry);
-                }
-                
-                this.dictionaries.set(file.name, {
-                    name: file.name,
-                    type,
-                    entries: Object.keys(dictionary).length,
-                    timestamp: new Date()
-                });
-            } catch (error) {
-                console.error(`Klaida įkeliant žodyną ${file.name}:`, error);
+                const baseWord = key.split('_')[0];
+                const entry = { ...data, type, source: file.name, originalKey: key, baseWord };
+                this.searcher.addPattern(baseWord, entry);
             }
+            
+            this.dictionaries.set(file.name, {
+                name: file.name,
+                type,
+                entries: Object.keys(dictionary).length,
+                timestamp: new Date()
+            });
         }
         
         this.searcher.buildFailureLinks();
