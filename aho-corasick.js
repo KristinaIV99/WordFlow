@@ -1,12 +1,15 @@
-const DEBUG = false;
+const DEBUG = true;
 
 class AhoCorasick {
     constructor() {
+        const constructorStart = performance.now();
         this.root = this.createNode();
         this.ready = false;
         this.patternCount = 0;
         this.wordBoundaryRegex = /[\s.,!?;:'"„"\(\)\[\]{}<>\/\-—–]/;
         this.patterns = new Map();
+        const constructorEnd = performance.now();
+        console.log(`[AhoCorasick] Konstruktoriaus inicializacija užtruko: ${(constructorEnd - constructorStart).toFixed(2)}ms`);
     }
 
     createNode() {
@@ -22,6 +25,7 @@ class AhoCorasick {
     }
 
     addPattern(pattern, data) {
+        const startTime = performance.now();
         if (DEBUG) {
             console.log(`[AhoCorasick] Pridedamas šablonas:`, pattern, data);
         }
@@ -74,22 +78,34 @@ class AhoCorasick {
         if (DEBUG) {
             console.log(`[AhoCorasick] Šablonas pridėtas su reikšmėmis:`, meanings);
         }
+        
+        const endTime = performance.now();
+        if (this.patternCount % 1000 === 0) {
+            console.log(`[AhoCorasick] Pridėta ${this.patternCount} šablonų, paskutinio pridėjimas užtruko: ${(endTime - startTime).toFixed(2)}ms`);
+        }
     }
 
     buildFailureLinks() {
+        const startTime = performance.now();
         if (DEBUG) {
             console.log('[AhoCorasick] Kuriami failure links');
         }
         
         const queue = [];
         
+        const initStart = performance.now();
         for (const [char, node] of this.root.next) {
             node.fail = this.root;
             queue.push(node);
         }
+        const initEnd = performance.now();
+        console.log(`[AhoCorasick] Pradinių ryšių sukūrimas užtruko: ${(initEnd - initStart).toFixed(2)}ms`);
 
+        const processStart = performance.now();
+        let processedNodes = 0;
         while (queue.length > 0) {
             const current = queue.shift();
+            processedNodes++;
 
             for (const [char, child] of current.next) {
                 queue.push(child);
@@ -110,15 +126,26 @@ class AhoCorasick {
                     child.relatedPatterns.add(pattern);
                 });
             }
+            
+            if (processedNodes % 10000 === 0) {
+                console.log(`[AhoCorasick] Apdorota ${processedNodes} mazgų iš ${queue.length} likusių eilėje`);
+            }
         }
+        const processEnd = performance.now();
+        console.log(`[AhoCorasick] Ryšių apdorojimas užtruko: ${(processEnd - processStart).toFixed(2)}ms, apdorota mazgų: ${processedNodes}`);
 
         this.ready = true;
+        const endTime = performance.now();
+        console.log(`[AhoCorasick] Viso failure links sukūrimas užtruko: ${(endTime - startTime).toFixed(2)}ms`);
+        
         if (DEBUG) {
             console.log('[AhoCorasick] Failure links sukurti');
         }
     }
 
     search(text) {
+        const startTime = performance.now();
+        
         if (DEBUG) {
             console.log('\n=== PRADEDAMA PAIEŠKA ===');
             console.log('Teksto ilgis:', text.length);
@@ -127,6 +154,7 @@ class AhoCorasick {
         const matches = [];
         const allText = text.toLowerCase();
         
+        const prepStart = performance.now();
         const allPatterns = Array.from(this.patterns.entries())
             .sort((a, b) => b[0].length - a[0].length);
             
@@ -136,7 +164,11 @@ class AhoCorasick {
                 console.log(`${index + 1}. "${pattern}" (${data.data.type}) - ilgis: ${pattern.length}`);
             });
         }
+        const prepEnd = performance.now();
+        console.log(`[AhoCorasick] Šablonų paruošimas užtruko: ${(prepEnd - prepStart).toFixed(2)}ms, šablonų kiekis: ${allPatterns.length}`);
 
+        const searchStart = performance.now();
+        let totalComparisons = 0;
         for (const [pattern, data] of allPatterns) {
             let index = 0;
             let patternMatches = 0;
@@ -146,6 +178,8 @@ class AhoCorasick {
             }
             
             while ((index = allText.indexOf(pattern, index)) !== -1) {
+                totalComparisons++;
+                
                 if (DEBUG) {
                     const context = allText.slice(Math.max(0, index - 20), 
                         Math.min(allText.length, index + pattern.length + 20));
@@ -181,17 +215,34 @@ class AhoCorasick {
             if (DEBUG) {
                 console.log(`Rasta atitikmenų "${pattern}": ${patternMatches}`);
             }
+            
+            if (totalComparisons > 0 && totalComparisons % 10000 === 0) {
+                const currentSearchTime = performance.now() - searchStart;
+                console.log(`[AhoCorasick] Atlikta ${totalComparisons} palyginimų, užtruko: ${currentSearchTime.toFixed(2)}ms`);
+            }
         }
+        const searchEnd = performance.now();
+        console.log(`[AhoCorasick] Paieška užtruko: ${(searchEnd - searchStart).toFixed(2)}ms, rasta atitikmenų: ${matches.length}, palyginimai: ${totalComparisons}`);
 
         if (DEBUG) {
             console.log('\n=== PAIEŠKA BAIGTA ===');
             console.log('Viso rasta atitikmenų:', matches.length);
         }
         
-        return this._filterOverlappingMatches(matches);
+        const filterStart = performance.now();
+        const filteredMatches = this._filterOverlappingMatches(matches);
+        const filterEnd = performance.now();
+        console.log(`[AhoCorasick] Persidengimų filtravimas užtruko: ${(filterEnd - filterStart).toFixed(2)}ms, atfiltruoti ${matches.length - filteredMatches.length} persidengiantys`);
+        
+        const endTime = performance.now();
+        console.log(`[AhoCorasick] Visa paieška užtruko: ${(endTime - startTime).toFixed(2)}ms`);
+        
+        return filteredMatches;
     }
 
     _addMatches(currentNode, word, startPosition, currentPosition, matches) {
+        const startTime = performance.now();
+        
         if (DEBUG) {
             console.log(`[AhoCorasick] Tikrinami atitimenys nodelyje:`, {
                 word,
@@ -200,6 +251,7 @@ class AhoCorasick {
             });
         }
 
+        let matchesAdded = 0;
         for (const output of currentNode.outputs) {
             const pattern = output.pattern;
             const patternStart = currentPosition - pattern.length + 1;
@@ -225,12 +277,20 @@ class AhoCorasick {
                         outputs: [output],
                         related: Array.from(currentNode.relatedPatterns)
                     });
+                    matchesAdded++;
                 }
             }
+        }
+        
+        const endTime = performance.now();
+        if (matchesAdded > 0) {
+            console.log(`[AhoCorasick] Pridėta ${matchesAdded} atitikmenų, užtruko: ${(endTime - startTime).toFixed(2)}ms`);
         }
     }
 
     _findMatchesInWord(word, startPosition, fullText) {
+        const startTime = performance.now();
+        
         const matches = [];
         let node = this.root;
         const lowerWord = word.toLowerCase();
@@ -272,14 +332,22 @@ class AhoCorasick {
             }
         }
 
+        const endTime = performance.now();
+        if (matches.length > 0) {
+            console.log(`[AhoCorasick] Rasta ${matches.length} atitikmenų žodyje "${word}", užtruko: ${(endTime - startTime).toFixed(2)}ms`);
+        }
+        
         return matches;
     }
 
     _filterOverlappingMatches(matches) {
+        const startTime = performance.now();
+        
         if (DEBUG) {
             console.log('[AhoCorasick] Pradedamas persidengimų filtravimas');
         }
     
+        const sortStart = performance.now();
         const sortedMatches = matches.sort((a, b) => {
             if (a.type === 'phrase' && b.type !== 'phrase') return -1;
             if (a.type !== 'phrase' && b.type === 'phrase') return 1;
@@ -289,6 +357,8 @@ class AhoCorasick {
             }
             return a.start - b.start;
         });
+        const sortEnd = performance.now();
+        console.log(`[AhoCorasick] Atitikmenų rūšiavimas užtruko: ${(sortEnd - sortStart).toFixed(2)}ms`);
 
         if (DEBUG) {
             console.log('Surūšiuoti atitimenys:', sortedMatches);
@@ -297,6 +367,7 @@ class AhoCorasick {
         const filtered = [];
         const usedRanges = [];
 
+        const filterStart = performance.now();
         for (const match of sortedMatches) {
             let hasOverlap = false;
         
@@ -321,11 +392,18 @@ class AhoCorasick {
                 console.log(`Praleista dėl persidengimo: "${match.pattern}"`);
             }
         }
+        const filterEnd = performance.now();
+        console.log(`[AhoCorasick] Atitikmenų filtravimas užtruko: ${(filterEnd - filterStart).toFixed(2)}ms`);
 
+        const endTime = performance.now();
+        console.log(`[AhoCorasick] Persidengimų filtravimas užtruko: ${(endTime - startTime).toFixed(2)}ms, rezultate liko: ${filtered.length} iš ${matches.length}`);
+        
         return filtered;
     }
 
     _splitIntoWords(text) {
+        const startTime = performance.now();
+        
         const words = [];
         let currentWord = '';
         let wordStart = 0;
@@ -356,6 +434,9 @@ class AhoCorasick {
             });
         }
 
+        const endTime = performance.now();
+        console.log(`[AhoCorasick] Teksto skaidymas į žodžius užtruko: ${(endTime - startTime).toFixed(2)}ms, rasta ${words.length} žodžių`);
+        
         return words;
     }
 
