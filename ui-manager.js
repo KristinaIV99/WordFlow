@@ -3,6 +3,7 @@ const DEBUG = true;  // arba false true kai norėsime išjungti
 
 export class UIManager {
     constructor() {
+        const constructorStart = performance.now();
         this.CLASS_NAME = '[UIManager]';
         this.debugLog('Konstruktorius inicializuotas');
         
@@ -28,6 +29,9 @@ export class UIManager {
         
         // Puslapiavimo kontrolės inicializuojamos atskirai su initPagination metodu
         this.paginationControls = null;
+        
+        const constructorEnd = performance.now();
+        console.log(`${this.CLASS_NAME} Konstruktoriaus inicializacija užtruko: ${(constructorEnd - constructorStart).toFixed(2)}ms`);
     }
     
     debugLog(...args) {
@@ -38,6 +42,7 @@ export class UIManager {
     
     // Inicializuojame puslapiavimo kontroles (iškviečiama iš main.js)
     initPagination(paginator) {
+        const startTime = performance.now();
         try {
             this.debugLog('Inicializuojamos puslapiavimo kontrolės');
             
@@ -51,9 +56,12 @@ export class UIManager {
             
             // Įterpiame slankiklį tarp mygtukų, jei paginator perduotas
             if (paginator) {
+                const sliderStart = performance.now();
                 const slider = paginator.initializeSlider();
                 this.paginationControls.insertBefore(slider, 
                     this.paginationControls.querySelector('.page-info'));
+                const sliderEnd = performance.now();
+                console.log(`${this.CLASS_NAME} Slankiklio inicializacija užtruko: ${(sliderEnd - sliderStart).toFixed(2)}ms`);
             }
                 
             this.paginationControls.style.display = 'none';
@@ -73,6 +81,8 @@ export class UIManager {
         } catch (error) {
             console.error(`${this.CLASS_NAME} Klaida inicializuojant puslapiavimo kontroles:`, error);
         }
+        const endTime = performance.now();
+        console.log(`${this.CLASS_NAME} Puslapiavimo kontrolių inicializacija užtruko: ${(endTime - startTime).toFixed(2)}ms`);
     }
     
     updateProgress(percent) {
@@ -91,6 +101,7 @@ export class UIManager {
     }
     
     showLoadingState() {
+        const startTime = performance.now();
         try {
             this.debugLog('Rodoma įkėlimo būsena');
             if (this.content) {
@@ -102,9 +113,12 @@ export class UIManager {
         } catch (error) {
             console.error(`${this.CLASS_NAME} Klaida rodant įkėlimo būseną:`, error);
         }
+        const endTime = performance.now();
+        console.log(`${this.CLASS_NAME} Įkėlimo būsenos rodymas užtruko: ${(endTime - startTime).toFixed(2)}ms`);
     }
     
     hideLoadingState() {
+        const startTime = performance.now();
         try {
             this.debugLog('Paslepiama įkėlimo būsena');
             if (this.content) {
@@ -114,9 +128,12 @@ export class UIManager {
         } catch (error) {
             console.error(`${this.CLASS_NAME} Klaida slepiant įkėlimo būseną:`, error);
         }
+        const endTime = performance.now();
+        console.log(`${this.CLASS_NAME} Įkėlimo būsenos paslėpimas užtruko: ${(endTime - startTime).toFixed(2)}ms`);
     }
     
     showError(message) {
+        const startTime = performance.now();
         try {
             console.warn('Klaidos pranešimas:', message);
             if (this.content) {
@@ -129,8 +146,12 @@ export class UIManager {
         } catch (error) {
             console.error(`${this.CLASS_NAME} Klaida rodant klaidos pranešimą:`, error);
         }
+        const endTime = performance.now();
+        console.log(`${this.CLASS_NAME} Klaidos rodymas užtruko: ${(endTime - startTime).toFixed(2)}ms`);
     }
+
     bindEvents(callbacks) {
+        const startTime = performance.now();
         try {
             this.debugLog('Prijungiami įvykių klausytojai');
             
@@ -163,7 +184,10 @@ export class UIManager {
         } catch (error) {
            console.error(`${this.CLASS_NAME} Klaida prijungiant įvykius:`, error);
         }
+        const endTime = performance.now();
+        console.log(`${this.CLASS_NAME} Įvykių prijungimas užtruko: ${(endTime - startTime).toFixed(2)}ms`);
     }
+    
     /**
      * Nustatome turinio elementą ir atnaujiname vartotojo sąsają
      * @param {string} html - HTML turinys
@@ -182,6 +206,7 @@ export class UIManager {
         div.className = 'text-content';
 
         // Statistikos dalis
+        const statsStart = performance.now();
         if (stats && Object.keys(stats).length > 0) {
             const statsDiv = document.createElement('div');
             statsDiv.className = 'text-stats';
@@ -205,6 +230,8 @@ export class UIManager {
             `;
             div.appendChild(statsDiv);
         }
+        const statsEnd = performance.now();
+        console.log(`${this.CLASS_NAME} Statistikos atvaizdavimas užtruko: ${(statsEnd - statsStart).toFixed(2)}ms`);
 
         // Tekstas su žymėjimais
         let highlightedHtml = html;
@@ -222,6 +249,7 @@ export class UIManager {
                 
                 // Laiko matavimo pabaiga
                 const highlightEndTime = performance.now();
+                console.log(`${this.CLASS_NAME} Teksto pažymėjimas užtruko: ${(highlightEndTime - highlightStartTime).toFixed(2)}ms`);
                 this.debugLog(`Pažymėjimas atliktas per ${(highlightEndTime - highlightStartTime).toFixed(2)}ms`);
             } catch (error) {
                 // Klaidos atveju užfiksuojame ir naudojame originalų HTML
@@ -248,6 +276,7 @@ export class UIManager {
             try {
                 pageData = options.paginator.setContent(contentDiv.innerHTML);
                 const paginationEndTime = performance.now();
+                console.log(`${this.CLASS_NAME} Turinio puslapiavimas užtruko: ${(paginationEndTime - paginationStartTime).toFixed(2)}ms`);
                 this.debugLog(`Puslapiavimas atliktas per ${(paginationEndTime - paginationStartTime).toFixed(2)}ms`);
             } catch (error) {
                 this.debugLog('KLAIDA puslapiuojant turinį:', error);
@@ -258,15 +287,21 @@ export class UIManager {
             contentDiv.innerHTML = pageData.content;
         }
         
+        const renderStart = performance.now();
         this.content.replaceChildren(div);
+        const renderEnd = performance.now();
+        console.log(`${this.CLASS_NAME} DOM atnaujinimas užtruko: ${(renderEnd - renderStart).toFixed(2)}ms`);
         
         if (options.onUpdatePageContent) {
+            const updateStart = performance.now();
             options.onUpdatePageContent(pageData);
+            const updateEnd = performance.now();
+            console.log(`${this.CLASS_NAME} Puslapio turinio atnaujinimas užtruko: ${(updateEnd - updateStart).toFixed(2)}ms`);
         }
         
         // Laiko matavimo pabaiga
         const endTime = performance.now();
-        this.debugLog(`Viso turinio nustatymas užtruko ${(endTime - startTime).toFixed(2)}ms`);
+        console.log(`${this.CLASS_NAME} Viso turinio nustatymas užtruko: ${(endTime - startTime).toFixed(2)}ms`);
         
         return pageData;
     }
