@@ -8,34 +8,21 @@ export class DictionaryLoader {
         this.LOADER_NAME = '[DictionaryLoader]';
     }
 
-    debugLog(...args) {
-        if (DEBUG) {
-            console.log(`${this.LOADER_NAME} [DEBUG]`, ...args);
-        }
-    }
-
     async loadDictionary(file) {
         const startTime = performance.now();
-        this.debugLog(`Pradedamas žodyno įkėlimas:`, file.name);
+        if (DEBUG) console.log(`${this.LOADER_NAME} Pradedamas žodyno įkėlimas:`, file.name);
         
         try {
             const text = await this._readFileAsText(file);
             const dictionary = this._parseJSON(text);
             const type = file.name.includes('phrases') ? 'phrase' : 'word';
             
-            const dictionaryData = {
-                name: file.name,
-                type,
-                entries: Object.keys(dictionary).length,
-                timestamp: new Date(),
-                data: dictionary
-            };
-            
             const loadTime = performance.now() - startTime;
-            console.log(`${this.LOADER_NAME} Žodynas įkeltas per ${loadTime.toFixed(2)}ms`);
+            if (DEBUG) console.log(`${this.LOADER_NAME} Žodynas įkeltas per ${loadTime.toFixed(2)}ms`);
             
             return {
-                dictionaryData,
+                dictionary,
+                type,
                 loadTimeMs: loadTime
             };
             
@@ -87,27 +74,5 @@ export class DictionaryLoader {
         } catch (error) {
             throw new Error(`Neteisingas žodyno formatas: ${error.message}`);
         }
-    }
-
-    async loadDictionaries(files) {
-        const startTime = performance.now();
-        this.debugLog(`Pradedamas ${files.length} žodynų įkėlimas`);
-        
-        const loadedDictionaries = [];
-        
-        for (const file of files) {
-            try {
-                const result = await this.loadDictionary(file);
-                loadedDictionaries.push(result.dictionaryData);
-            } catch (error) {
-                console.error(`${this.LOADER_NAME} Klaida įkeliant žodyną ${file.name}:`, error);
-                // Tęsiame su kitais žodynais net jei vienas nepavyko
-            }
-        }
-        
-        const endTime = performance.now();
-        console.log(`${this.LOADER_NAME} Viso įkelti ${loadedDictionaries.length} žodynai per ${(endTime - startTime).toFixed(2)}ms`);
-        
-        return loadedDictionaries;
     }
 }
