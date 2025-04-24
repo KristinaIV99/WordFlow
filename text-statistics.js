@@ -1,9 +1,17 @@
 const DEBUG = false;  // arba false, true kai norėsime išjungti
 
+// Pastovus reguliarių išraiškų objektas - sukuriamas tik kartą
+const quoteRegex = /[""'\u201C\u201D\u2018\u2019"]/gu;
+const punctuationRegex = /[.,!?;#]/g;
+
 export class TextStatistics {
     constructor() {
         this.CLASS_NAME = '[TextStatistics]';
         this.currentText = '';
+        // Žodžių kešas greitesnei paieškai
+        this._cleanWordsCache = new Map();
+        // Kešas žodynui
+        this._dictionaryWordsCache = null;
     }
 
     debugLog(...args) {
@@ -13,7 +21,14 @@ export class TextStatistics {
     }
 
     calculateStats(text, knownWords) {
+        const startTime = performance.now();
         this.currentText = text;
+        
+        // Kešuojame žodyno žodžius, jei dar neturime
+        if (!this._dictionaryWordsCache) {
+            this._prepareKnownWordsCache(knownWords);
+        }
+        
         const unknownWordsList = this.getUnknownWords(text, knownWords);
         const words = this._getWords(text);
         const self = this;  // Tik viena deklaracija
@@ -21,34 +36,30 @@ export class TextStatistics {
         // Sukuriame Map žodžių originalių formų saugojimui
         const wordMap = new Map();
         
-        // Renkame unikalius žodžius
-        const uniqueWords = new Set(words.map(function(word) {
-            var lowerWord = word.toLowerCase();
-
-            // Pridedame debug pranešimą
-            self.debugLog('Apdorojamas žodis:', word);
+        // Renkame unikalius žodžius - optimizuota versija
+        const uniqueWords = new Set();
+        for (let i = 0; i < words.length; i++) {
+            const word = words[i];
+            let lowerWord = word.toLowerCase();
             
             // Jei žodis turi brūkšnelį arba dvitaškį ir atitinka kriterijus, palikti jį nepakeistą
             if (!self._shouldKeepAsOneWord(lowerWord)) {
                 lowerWord = lowerWord
-                    .replace(/[.,!?;#]/g, '')
-                    .replace(/[''""'\u201C\u201D\u2018\u2019"]/gu, function(match) {
-                        return /['']/.test(match) ? match : '';
-                    })
+                    .replace(punctuationRegex, '')
+                    .replace(quoteRegex, '')
                     .trim();
-                self.debugLog('Po valymo:', lowerWord);
-            } else {
-                self.debugLog('Išsaugotas kaip vienas žodis:', lowerWord);
             }
-
-            // Saugome originalias formas
-            if (!wordMap.has(lowerWord)) {
-                wordMap.set(lowerWord, new Set());
+            
+            if (lowerWord.length > 0) {
+                uniqueWords.add(lowerWord);
+                
+                // Saugome originalias formas
+                if (!wordMap.has(lowerWord)) {
+                    wordMap.set(lowerWord, new Set());
+                }
+                wordMap.get(lowerWord).add(word);
             }
-            wordMap.get(lowerWord).add(word);
-
-            return lowerWord;
-        }).filter(word => word.length > 0));
+        }
 
         // Išvedame statistiką
         this.debugLog('=== ŽODŽIŲ STATISTIKA ===');
@@ -64,6 +75,8 @@ export class TextStatistics {
             unknownPercentage: ((unknownWordsList.length / uniqueWords.size) * 100).toFixed(2)
         };
 
+        const endTime = performance.now();
+        console.log(`${this.CLASS_NAME} Statistikos skaičiavimas užtruko: ${(endTime - startTime).toFixed(2)}ms`);
         this.debugLog('Statistika:', stats);
         return stats;
     }
@@ -112,49 +125,85 @@ export class TextStatistics {
         return words;
     }
 
+    // Optimizuotas žodžių tikrinimas žodyne
     _isWordInDictionary(word, knownWords) {
-        const cleanWord = word.toLowerCase()
-            .replace(/[""'\u201C\u201D\u2018\u2019"]/gu, '')
-            .trim();
-        const wordVariants = [
-            cleanWord,
-            word.toLowerCase().replace(/[""'\u201C\u201D\u2018\u2019"]/gu, ''),
-            word.toLowerCase()
-        ];
+        // Pritaikome tik vieną kartą valymą
+        const cleanWord = word.toLowerCase().replace(quoteRegex, '').trim();
         
-        const isKnown = Object.keys(knownWords).some(dictWord => {
-            const baseWord = dictWord.split('_')[0]
-                .toLowerCase()
-                .replace(/[""'\u201C\u201D\u2018\u2019"]/gu, '')
-                .trim();
-            return wordVariants.some(variant => {
-                const cleanVariant = variant
-                    .replace(/[""'\u201C\u201D\u2018\u2019"]/gu, '')
-                    .trim();
-                
-                return baseWord === cleanVariant;
-            });
-        });
+        // Patikriname, ar jau turime šio žodžio rezultatą
+        if (this._cleanWordsCache.has(cleanWord)) {
+            return this._cleanWordsCache.get(cleanWord);
+        }
+        
+        // Tiesioginis tikrinimas kešuotuose žodynuose
+        let isKnown = false;
+        
+        // Pirmiausiai tiesiogiai patikriname, ar žodis yra žodyne
+        if (this._dictionaryWordsCache.has(cleanWord)) {
+            isKnown = true;
+        } else {
+            // Tikriname, ar bazinis žodis (iki '_') yra žodyne
+            for (const dictWord of this._dictionaryWordsCache) {
+                const baseWord = dictWord.split('_')[0];
+                if (baseWord === cleanWord) {
+                    isKnown = true;
+                    break;
+                }
+            }
+        }
 
-        this.debugLog('Žodžio patikrinimas žodyne:', { žodis: word, rastas: isKnown });
+        // Išsaugome rezultatą kešavimui
+        this._cleanWordsCache.set(cleanWord, isKnown);
+        
+        if (DEBUG) this.debugLog('Žodžio patikrinimas žodyne:', { žodis: word, rastas: isKnown });
         return isKnown;
     }
     
+    // Naujas metodas žodyno žodžiams kešuoti
+    _prepareKnownWordsCache(knownWords) {
+        const startTime = performance.now();
+        this._dictionaryWordsCache = new Set();
+        
+        // Surenkame visus žodžius į Set greitesnei paieškai
+        for (const dictWord in knownWords) {
+            const cleanWord = dictWord.toLowerCase().replace(quoteRegex, '').trim();
+            this._dictionaryWordsCache.add(cleanWord);
+            
+            // Pridedame ir bazinį žodį (iki '_')
+            const baseWord = dictWord.split('_')[0].toLowerCase().replace(quoteRegex, '').trim();
+            this._dictionaryWordsCache.add(baseWord);
+        }
+        
+        const endTime = performance.now();
+        console.log(`${this.CLASS_NAME} Žodyno kešavimas užtruko: ${(endTime - startTime).toFixed(2)}ms, kešuota ${this._dictionaryWordsCache.size} žodžių`);
+    }
+    
     getUnknownWords(text, knownWords) {
+        const startTime = performance.now();
         this.currentText = text;
         this.debugLog('Pradedu nežinomų žodžių paiešką');
+        
+        // Jei nėra kešuotų žodyno žodžių, sukuriame juos
+        if (!this._dictionaryWordsCache) {
+            this._prepareKnownWordsCache(knownWords);
+        }
+        
+        // Išvalome žodžių kešą prieš naują paiešką
+        this._cleanWordsCache.clear();
+        
         const words = this._getWords(text);
         
         // Saugome originalius žodžius ir jų mažąsias versijas žodyno paieškai
         const wordMap = new Map();
-        words.forEach(word => {
+        
+        for (const word of words) {
             let lowerWord = word.toLowerCase();
             
             // Jei žodis turi brūkšnelį arba dvitaškį ir atitinka kriterijus, palikti jį nepakeistą
             if (!this._shouldKeepAsOneWord(lowerWord)) {
                 lowerWord = lowerWord
-                    .replace(/[.,!?;#]/g, '')
-                    .replace(/[''""'\u201C\u201D\u2018\u2019"]/gu, match => /['']/.test(match) ? match : '')
+                    .replace(punctuationRegex, '')
+                    .replace(quoteRegex, '')
                     .trim();
             }
             
@@ -164,23 +213,23 @@ export class TextStatistics {
                 }
                 wordMap.get(lowerWord).add(word);
             }
-        });
+        }
 
         this.debugLog('Unikalių žodžių Map:', wordMap);
         
         const unknownWords = [];
-        for (const [lowerWord, originalForms] of wordMap) {
-            this.debugLog('Tikrinu žodį:', lowerWord, 'Originalios formos:', originalForms);
-
-            if (this._isWordInDictionary(lowerWord, knownWords)) {
-                this.debugLog('Žodis rastas žodyne:', lowerWord);
-                continue;
+        
+        // Greitesnis tikrinimas per Map
+        for (const [lowerWord] of wordMap) {
+            // Tiesiogiai naudojame _isWordInDictionary, kuris kešuoja rezultatus
+            if (!this._isWordInDictionary(lowerWord, knownWords)) {
+                this.debugLog('Žodis nežinomas:', lowerWord);
+                unknownWords.push(lowerWord);
             }
-
-            this.debugLog('Žodis nežinomas:', lowerWord);
-            unknownWords.push(lowerWord);
         }
 
+        const endTime = performance.now();
+        console.log(`${this.CLASS_NAME} Nežinomų žodžių paieška užtruko: ${(endTime - startTime).toFixed(2)}ms`);
         this.debugLog('Nežinomų žodžių kiekis:', unknownWords.length);
         this.debugLog('Pirmi 10 nežinomų žodžių:', unknownWords.slice(0, 10));
         
